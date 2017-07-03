@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+
+# yarp: yet another registry parser
+# (c) Maxim Suhanov
+
+from yarp import *
+import argparse
+from collections import namedtuple
+import os
+import sys
+
+PROGRAM_NAME = 'yarp-timeline'
+PROGRAM_VERSION = '1.0.0-beta1'
+
+Arguments = namedtuple('Arguments', [ 'primary_file', 'faster' ])
+TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
+
+def parse_args():
+	"""Parse command line arguments and return a named tuple (Arguments)."""
+
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Parse a Windows registry file, print the timeline for keys (including deleted ones).', add_help = False, prefix_chars = '-')
+
+	group_main = parser.add_argument_group('Main arguments')
+	group_opt = parser.add_argument_group('Optional arguments')
+	group_misc = parser.add_argument_group('Miscellaneous arguments')
+
+	group_main.add_argument('file', help = 'a registry file (primary) to parse')
+
+	group_opt.add_argument('--fast', action = 'store_true', help = 'do not use intermediate states to extend the timeline when applying a transaction log (new format)')
+
+	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
+	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
+
+	parsed_args = parser.parse_args()
+
+	primary_file = parsed_args.file
+	faster = parsed_args.fast
+
+	return Arguments(primary_file = primary_file, faster = faster)
+
+keys_list = []
+def extend_keys_list(do_deleted = False):
+	def process_key(key):
+		global keys_list
+
+		key_parsed = parse_key(key, False)
+		if key_parsed is not None and key_parsed not in keys_list:
+			keys_list.append(key_parsed)
+
+		for subkey in key.subkeys():
+			try:
+				process_key(subkey)
+			except Registry.RegistryException:
+				pass
+
+	global hive
+
+	process_key(hive.root_key())
+
+	if do_deleted:
+		global keys_list
+
+		try:
+			hive.walk_everywhere()
+		except Registry.RegistryException:
+			return
+
+		scanner = RegistryRecover.Scanner(hive)
+		for item in scanner.scan():
+			if type(item) is Registry.RegistryKey:
+				key_parsed = parse_key(item, True)
+				if key_parsed is not None and key_parsed not in keys_list:
+					keys_list.append(key_parsed)
+
+def parse_key(key, is_deleted):
+	try:
+		path_or_name = key.path()
+	except Registry.RegistryException:
+		path_or_name = key.name()
+		is_path_known = False
+	else:
+		is_path_known = True
+
+	try:
+		timestamp = key.last_written_timestamp()
+	except (ValueError, OverflowError):
+		return
+
+	return TimelineEntry(path_or_name = path_or_name, is_deleted = is_deleted, is_path_known = is_path_known, timestamp = timestamp)
+
+def print_timeline_header():
+	print('Registry file\tKey path/name\tIs deleted\tIs path known\tTimestamp (UTC)')
+
+def print_timeline_entry(entry, registry_file):
+	print('{}\t{}\t{}\t{}\t{}'.format(registry_file, entry.path_or_name, entry.is_deleted, entry.is_path_known, entry.timestamp))
+
+def print_timeline(registry_file):
+	global keys_list
+
+	print_timeline_header()
+	for entry in keys_list:
+		print_timeline_entry(entry, registry_file)
+
+args = parse_args()
+
+if not os.path.isfile(args.primary_file):
+	print('Primary file does not exist: {}'.format(args.primary_file), file = sys.stderr)
+	sys.exit(255)
+
+primary = open(args.primary_file, 'rb')
+hive = Registry.RegistryHive(primary)
+
+extend_keys_list(True) # Extend the list of keys (including deleted ones) for the first time, before applying a transaction log.
+
+log_files = RegistryHelpers.DiscoverLogFiles(args.primary_file)
+
+log = None
+if log_files.log_path is not None:
+	log = open(log_files.log_path, 'rb')
+
+log1 = None
+if log_files.log1_path is not None:
+	log1 = open(log_files.log1_path, 'rb')
+
+log2 = None
+if log_files.log2_path is not None:
+	log2 = open(log_files.log2_path, 'rb')
+
+if not args.faster:
+	hive.log_entry_callback = extend_keys_list # Extend the list of keys (without deleted ones) each time a log entry has been applied.
+
+try:
+	recovery_result = hive.recover_auto(log, log1, log2)
+except Registry.AutoRecoveryException:
+	print('An error has occurred when recovering a hive using a transaction log', file = sys.stderr)
+else:
+	if recovery_result.recovered and not recovery_result.is_new_log:
+		extend_keys_list() # Finally, extend the list of keys (without deleted ones) after an old transaction log file has been applied.
+	elif recovery_result.recovered and recovery_result.is_new_log and args.faster:
+		extend_keys_list()
+
+keys_list.sort(key = lambda x: x.timestamp, reverse = True)
+print_timeline(args.primary_file)
+
+hive = None
+primary.close()
+
+if log is not None:
+	log.close()
+
+if log1 is not None:
+	log1.close()
+
+if log2 is not None:
+	log2.close()

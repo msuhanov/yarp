@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+
+# yarp: yet another registry parser
+# (c) Maxim Suhanov
+
+from yarp import *
+import argparse
+from collections import namedtuple
+import os
+import sys
+
+PROGRAM_NAME = 'yarp-print'
+PROGRAM_VERSION = '1.0.0-beta1'
+
+Arguments = namedtuple('Arguments', [ 'primary_file', 'do_recovery', 'do_deleted' ])
+
+def parse_args():
+	"""Parse command line arguments and return a named tuple (Arguments)."""
+
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Parse a Windows registry file, print all keys and values.', add_help = False, prefix_chars = '-')
+
+	group_main = parser.add_argument_group('Main arguments')
+	group_opt = parser.add_argument_group('Optional arguments')
+	group_misc = parser.add_argument_group('Miscellaneous arguments')
+
+	group_main.add_argument('file', help = 'a registry file (primary) to parse')
+	group_opt.add_argument('--no-recovery', action = 'store_true', help = 'do not discover and use transaction log files to recover the hive (in memory)')
+	group_opt.add_argument('--deleted', action = 'store_true', help = 'include deleted keys and values to the output')
+
+	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
+	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
+
+	parsed_args = parser.parse_args()
+
+	primary_file = parsed_args.file
+	do_recovery = not parsed_args.no_recovery
+	do_deleted = parsed_args.deleted
+
+	return Arguments(primary_file = primary_file, do_recovery = do_recovery, do_deleted = do_deleted)
+
+def print_hive_information(hive):
+	print('Last written timestamp (UTC): {}'.format(hive.last_written_timestamp()))
+	try:
+		print('Last reorganized timestamp (UTC): {}'.format(hive.last_reorganized_timestamp()))
+	except (ValueError, OverflowError):
+		pass
+
+	print()
+
+def print_value(value):
+	value_name = value.name()
+	if value_name == '':
+		print('Default value')
+	else:
+		print('Value name: {}'.format(value_name))
+
+	print('Value type: {}'.format(value.type_str()))
+	print('Data size: {}'.format(value.data_size()))
+
+	try:
+		data = value.data()
+	except UnicodeDecodeError:
+		data = value.data_raw()
+
+	if type(data) is bytes:
+		print('Data (hexdump):')
+		print(RegistryHelpers.HexDump(data))
+	elif type(data) is list:
+		print('Data (one list element per line):')
+		for element in data:
+			print(element)
+	else:
+		print('Data (decoded):')
+		print(data)
+
+	print()
+
+def print_key(key):
+	key_path = key.path()
+	if key_path == '':
+		print('Root key')
+	else:
+		print('Key path: {}'.format(key_path))
+
+	classname = key.classname()
+	if classname is not None:
+		print('Class name: {}'.format(classname))
+
+	print('Last written timestamp (UTC): {}'.format(key.last_written_timestamp()))
+	print('Access bits: {}'.format(key.access_bits()))
+
+	print()
+
+	for value in key.values():
+		print_value(value)
+
+	print('---')
+	print()
+
+def print_key_recursive(key):
+	print_key(key)
+
+	for subkey in key.subkeys():
+		print_key_recursive(subkey)
+
+def print_deleted_value(value):
+	value_name = value.name()
+	if value_name == '':
+		print('Default value')
+	else:
+		print('Value name: {}'.format(value_name))
+
+	print('Value type: {}'.format(value.type_str()))
+	print('Data size: {}'.format(value.data_size()))
+
+	try:
+		data = value.data()
+	except Registry.RegistryException:
+		data = None
+	except UnicodeDecodeError:
+		data = value.data_raw()
+
+	if data is None:
+		print('Data not recovered')
+	else:
+		if type(data) is bytes:
+			print('Data (hexdump):')
+			print(RegistryHelpers.HexDump(data))
+		elif type(data) is list:
+			print('Data (one list element per line):')
+			for element in data:
+				print(element)
+		else:
+			print('Data (decoded):')
+			print(data)
+
+	print()
+
+def print_deleted_key(key):
+	try:
+		key_path = key.path()
+	except Registry.RegistryException:
+		key_path = None
+
+	if key_path is None:
+		print('Unknown key path')
+		print('Partial key path: {}'.format(key.path_partial()))
+		print('Key name: {}'.format(key.name()))
+	else:
+		if key_path == '':
+			print('Root key')
+		else:
+			print('Key path: {}'.format(key_path))
+
+	try:
+		classname = key.classname()
+	except (Registry.RegistryException, UnicodeDecodeError):
+		classname = None
+
+	if classname is not None:
+		print('Class name: {}'.format(classname))
+
+	try:
+		print('Last written timestamp (UTC): {}'.format(key.last_written_timestamp()))
+	except (ValueError, OverflowError):
+		print('Last written timestamp is not plausible')
+
+	print('Access bits: {}'.format(key.access_bits()))
+
+	print()
+
+	try:
+		for value in key.values():
+			print_deleted_value(value)
+	except Registry.RegistryException:
+		pass
+
+	print('---')
+	print()
+
+# Currently, we can use functions for deleted keys and values to print keys and values in a truncated hive.
+print_truncated_key = print_deleted_key
+print_truncated_value = print_deleted_value
+
+args = parse_args()
+
+if not os.path.isfile(args.primary_file):
+	print('Primary file does not exist: {}'.format(args.primary_file), file = sys.stderr)
+	sys.exit(255)
+
+primary = open(args.primary_file, 'rb')
+
+try:
+	hive = Registry.RegistryHive(primary)
+except (RegistryFile.BaseBlockException, RegistryFile.NotSupportedException):
+	raise
+except Registry.RegistryException:
+	truncated = True
+else:
+	truncated = False
+
+if truncated:
+	print('Primary file seems to be truncated, only available keys and values will be printed', file = sys.stderr)
+	hive = Registry.RegistryHiveTruncated(primary)
+
+	print('Hive information:')
+	print()
+	print_hive_information(hive)
+
+	print('Keys and values (allocated):')
+	print()
+
+	all_values = []
+	for item in hive.scan():
+		if type(item) is Registry.RegistryValue:
+			all_values.append(item)
+		elif type(item) is Registry.RegistryKey:
+			print_truncated_key(item)
+
+	print('All values (allocated):')
+	print()
+	for value in all_values:
+		print_truncated_value(value)
+
+	if args.do_deleted:
+		print('Unallocated keys and values (may contain reallocated data):')
+		print()
+
+		scanner = RegistryRecover.Scanner(hive, False)
+		deleted_values = []
+
+		for item in scanner.scan():
+			if type(item) is Registry.RegistryKey:
+				print_deleted_key(item)
+			elif type(item) is Registry.RegistryValue:
+				deleted_values.append(item)
+
+		print('Unallocated values (all, may contain reallocated data):')
+		print()
+		for value in deleted_values:
+			print_deleted_value(value)
+
+	sys.exit(0)
+
+if args.do_recovery:
+	log_files = RegistryHelpers.DiscoverLogFiles(args.primary_file)
+
+	log = None
+	if log_files.log_path is not None:
+		log = open(log_files.log_path, 'rb')
+
+	log1 = None
+	if log_files.log1_path is not None:
+		log1 = open(log_files.log1_path, 'rb')
+
+	log2 = None
+	if log_files.log2_path is not None:
+		log2 = open(log_files.log2_path, 'rb')
+
+	try:
+		recovery_result = hive.recover_auto(log, log1, log2)
+	except Registry.AutoRecoveryException:
+		print('An error has occurred when recovering a hive using a transaction log', file = sys.stderr)
+
+hive.walk_everywhere()
+
+print('Hive information:')
+print()
+print_hive_information(hive)
+
+print('Keys and values:')
+print()
+print_key_recursive(hive.root_key())
+
+if args.do_deleted:
+	print('Deleted keys and values (may contain reallocated data):')
+	print()
+
+	scanner = RegistryRecover.Scanner(hive)
+	deleted_values = []
+
+	for item in scanner.scan():
+		if type(item) is Registry.RegistryKey:
+			print_deleted_key(item)
+		elif type(item) is Registry.RegistryValue:
+			deleted_values.append(item)
+
+	print('Deleted values (all, may contain reallocated data):')
+	print()
+	for value in deleted_values:
+		print_deleted_value(value)
+
+hive = None
+primary.close()
+
+if args.do_recovery:
+	if log is not None:
+		log.close()
+
+	if log1 is not None:
+		log1.close()
+
+	if log2 is not None:
+		log2.close()

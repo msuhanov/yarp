@@ -1,0 +1,33 @@
+yarp: yet another registry parser
+
+1. Project goals: the library and tools
+
+- Parse Windows registry files in a proper way (with forensics in mind).
+- Expose values of all fields of underlying registry structures.
+- Support for truncated registry files.
+- Support for recovering deleted keys and values.
+- Support for carving of registry hives.
+- Support for transaction log files.
+
+2. Hive version numbers supported
+
+- Full support: 1.1-1.6.
+- No support: 1.0.
+
+In general, full support is available for hive files from installations of
+Windows NT 3.1 and later versions of Windows NT (including Windows 10);
+hive files from installations of pre-release versions of Windows NT 3.1 are
+not supported.
+
+3. Documentation
+
+See the docstrings in the module.
+For a basic usage example, see the 'Example' file.
+
+4. License
+
+This project is made available under the terms of the GNU GPL, version 3.
+See the 'License' file.
+
+---
+(c) Maxim Suhanov

@@ -1,0 +1,1021 @@
+# coding: utf-8
+
+# yarp: yet another registry parser
+# (c) Maxim Suhanov
+
+import pytest
+from io import BytesIO
+from os import path, remove
+from hashlib import md5
+from yarp import Registry, RegistryFile, RegistryRecords, RegistryRecover, RegistryCarve, RegistryHelpers
+
+HIVES_DIR = 'hives_for_tests'
+RECORDS_DIR = 'records_for_tests'
+
+hive_empty = path.join(HIVES_DIR, 'EmptyHive')
+hive_bigdata = path.join(HIVES_DIR, 'BigDataHive')
+hive_many_subkeys = path.join(HIVES_DIR, 'ManySubkeysHive')
+hive_garbage = path.join(HIVES_DIR, 'GarbageHive')
+hive_duplicate_subkeys = path.join(HIVES_DIR, 'DuplicateSubkeysHive')
+
+hive_dirty_new1 = path.join(HIVES_DIR, 'NewDirtyHive1', 'NewDirtyHive')
+hive_dirty_new1_log1 = path.join(HIVES_DIR, 'NewDirtyHive1', 'NewDirtyHive.LOG1')
+hive_dirty_new1_log2 = path.join(HIVES_DIR, 'NewDirtyHive1', 'NewDirtyHive.LOG2')
+hive_dirty_new1_recovered = path.join(HIVES_DIR, 'NewDirtyHive1', 'RecoveredHive_Windows10')
+
+hive_dirty_new2 = path.join(HIVES_DIR, 'NewDirtyHive2', 'NewDirtyHive')
+hive_dirty_new2_log1 = path.join(HIVES_DIR, 'NewDirtyHive2', 'NewDirtyHive.LOG1')
+hive_dirty_new2_log2 = path.join(HIVES_DIR, 'NewDirtyHive2', 'NewDirtyHive.LOG2')
+
+hive_dirty_old = path.join(HIVES_DIR, 'OldDirtyHive', 'OldDirtyHive')
+hive_dirty_old_log = path.join(HIVES_DIR, 'OldDirtyHive', 'OldDirtyHive.LOG1')
+hive_dirty_old_recovered = path.join(HIVES_DIR, 'OldDirtyHive', 'RecoveredHive_Windows7')
+
+hive_unicode = path.join(HIVES_DIR, 'UnicodeHive')
+hive_extended_ascii = path.join(HIVES_DIR, 'ExtendedASCIIHive')
+hive_invalid_parent = path.join(HIVES_DIR, 'InvalidParentHive')
+hive_bad_list = path.join(HIVES_DIR, 'BadListHive')
+hive_bad_subkey = path.join(HIVES_DIR, 'BadSubkeyHive')
+
+hive_bad_baseblock = path.join(HIVES_DIR, 'BadBaseBlockHive', 'BadBaseBlockHive')
+hive_bad_baseblock_log1 = path.join(HIVES_DIR, 'BadBaseBlockHive', 'BadBaseBlockHive.LOG1')
+hive_bad_baseblock_log2 = path.join(HIVES_DIR, 'BadBaseBlockHive', 'BadBaseBlockHive.LOG2')
+
+hive_bad_log1 = path.join(HIVES_DIR, 'BadLogHive1', 'BadLogHive')
+hive_bad_log1_log1 = path.join(HIVES_DIR, 'BadLogHive1', 'BadLogHive.LOG1')
+hive_bad_log1_log2 = path.join(HIVES_DIR, 'BadLogHive1', 'BadLogHive.LOG2')
+
+hive_bad_log2 = path.join(HIVES_DIR, 'BadLogHive2', 'BadLogHive')
+hive_bad_log2_log1 = path.join(HIVES_DIR, 'BadLogHive2', 'BadLogHive.LOG1')
+hive_bad_log2_log2 = path.join(HIVES_DIR, 'BadLogHive2', 'BadLogHive.LOG2')
+
+hive_bad_log3 = path.join(HIVES_DIR, 'BadLogHive3', 'BadLogHive')
+hive_bad_log3_log1 = path.join(HIVES_DIR, 'BadLogHive3', 'BadLogHive.LOG1')
+hive_bad_log3_log2 = path.join(HIVES_DIR, 'BadLogHive3', 'BadLogHive.LOG2')
+
+hive_bogus_keynames = path.join(HIVES_DIR, 'BogusKeyNamesHive')
+hive_new_flags = path.join(HIVES_DIR, 'NewFlagsHive')
+hive_multisz = path.join(HIVES_DIR, 'MultiSzHive')
+hive_strings = path.join(HIVES_DIR, 'StringValuesHive')
+hive_wrong_order = path.join(HIVES_DIR, 'WrongOrderHive')
+hive_truncated_name = path.join(HIVES_DIR, 'TruncatedNameHive')
+hive_healed = path.join(HIVES_DIR, 'HealedHive')
+hive_deleted_data = path.join(HIVES_DIR, 'DeletedDataHive')
+hive_deleted_tree = path.join(HIVES_DIR, 'DeletedTreeHive')
+hive_comp = path.join(HIVES_DIR, 'CompHive')
+hive_remnants = path.join(HIVES_DIR, 'RemnantsHive')
+hive_truncated = path.join(HIVES_DIR, 'TruncatedHive')
+hive_effective_size = path.join(HIVES_DIR, 'EffectiveSizeHive')
+hive_deleted_tree_no_root_flag = path.join(HIVES_DIR, 'DeletedTreeNoRootFlagHive')
+hive_deleted_tree_partial_path = path.join(HIVES_DIR, 'DeletedTreePartialPathHive')
+hive_slack = path.join(HIVES_DIR, 'SlackHive')
+
+hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
+hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
+
+log_discovery = [
+	path.join(HIVES_DIR, 'Discovery', '1', 'aa'),
+	path.join(HIVES_DIR, 'Discovery', '2', 'AA'),
+	path.join(HIVES_DIR, 'Discovery', '3', 'AA'),
+	path.join(HIVES_DIR, 'Discovery', '4', 'AA'),
+	path.join(HIVES_DIR, 'Discovery', '5', 'aa')
+]
+
+record_nk = path.join(RECORDS_DIR, 'dummy_nk')
+record_vk = path.join(RECORDS_DIR, 'dummy_vk')
+record_sk = path.join(RECORDS_DIR, 'dummy_sk')
+record_li = path.join(RECORDS_DIR, 'dummy_li')
+record_lf = path.join(RECORDS_DIR, 'dummy_lf')
+record_lh = path.join(RECORDS_DIR, 'dummy_lh')
+record_ri = path.join(RECORDS_DIR, 'dummy_ri')
+record_list = path.join(RECORDS_DIR, 'dummy_list')
+record_db = path.join(RECORDS_DIR, 'dummy_db')
+
+def test_empty():
+	with open(hive_empty, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		assert hive.root_key().subkeys_count() == 0
+		for key in hive.root_key().subkeys():
+			assert False
+
+		assert hive.root_key().path() == ''
+		assert hive.root_key().path(True) != ''
+
+		timestamp = hive.last_written_timestamp()
+		assert timestamp.year == 2017
+		assert timestamp.month == 3
+		assert timestamp.day == 4
+		assert timestamp.hour == 16
+		assert timestamp.minute == 37
+		assert timestamp.second == 31
+
+		timestamp = hive.last_reorganized_timestamp()
+		assert timestamp is None
+
+def test_bigdata():
+	with open(hive_bigdata, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		key = hive.root_key().subkey('key_with_bigdata')
+		assert key.values_count() == 2
+
+		value = key.value()
+		assert hive.registry_file.get_cell(value.key_value.get_data_offset())[ : 2] == b'db'
+
+		data = value.data()
+		assert len(data) == 16345
+		for c in data.decode('windows-1252'):
+			assert c == '1'
+
+		value = key.value('V')
+		assert hive.registry_file.get_cell(value.key_value.get_data_offset())[ : 2] == b'db'
+
+		data = value.data()
+		assert len(data) == 81725
+		for c in data.decode('windows-1252'):
+			assert c == '2'
+
+		assert key.value('dont_exist') is None
+
+def test_many_subkeys():
+	with open(hive_many_subkeys, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		key = hive.find_key('key_with_many_subkeys')
+		assert key.subkeys_count() == 5000
+
+		assert hive.registry_file.get_cell(key.key_node.get_subkeys_list_offset())[ : 2] == b'ri'
+
+		allowed_range = range(1, 5000 + 1)
+		for subkey in key.subkeys():
+			assert int(subkey.name()) in allowed_range
+
+		key = hive.find_key('key_with_MAny_subkeys\\2119\\find_me')
+		assert key.path() == 'key_with_many_subkeys\\2119\\find_me'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key('\\key_with_maNY_sUBkeys\\2119\\Find_me')
+		assert key.path() == 'key_with_many_subkeys\\2119\\find_me'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key('key_with_many_subkeys\\2119\\find_me')
+		assert key.path() == 'key_with_many_subkeys\\2119\\find_me'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key('key_with_many_subkeys\\3000')
+		assert key is not None
+
+		key = hive.find_key('key_with_many_subkeys\\3000\\dont_exist')
+		assert key is None
+
+		key = hive.find_key('key_with_many_subkeys\\dont_exist\\dont_exist')
+		assert key is None
+
+def test_garbage():
+	with open(hive_garbage, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		assert hive.registry_file.baseblock.get_hbins_data_size() == hive.registry_file.baseblock.effective_hbins_data_size == 4096
+
+		cnt = 0
+		for hive_bin in hive.registry_file.hive_bins():
+			cnt += 1
+
+		assert cnt == 1
+
+def test_duplicate_subkeys():
+	with open(hive_duplicate_subkeys, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		with pytest.raises(Registry.WalkException):
+			key = hive.root_key().subkey('key_with_many_subkeys')
+
+			assert key is not None
+
+			for subkey in key.subkeys():
+				pass
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_dirty_new1(reverse):
+
+	def log_entry_counter():
+		log_entry_counter.c += 1
+
+	with open(hive_dirty_new1, 'rb') as primary, open(hive_dirty_new1_log1, 'rb') as log1, open(hive_dirty_new1_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+
+		key_1 = hive.find_key('Key1')
+		key_21 = hive.find_key('Key2\\Key2_1')
+		key_22 = hive.find_key('Key2\\Key2_2')
+		assert key_1 is not None
+		assert key_21 is not None
+		assert key_22 is not None
+
+		key_bad = hive.find_key('Key2\\Key2_2\\dont_exist')
+		assert key_bad is None
+
+		value = key_1.value()
+		value_data = value.data()
+		assert len(value_data) == 6001
+		for c in value_data[ : -1]:
+			assert c == '1'
+
+		assert value_data[-1] == '\x00'
+
+		assert len(hive.find_key('KEY2').value('v').data()) == 9
+		assert hive.find_key('key2').value('V').data() == 'testTEST\x00'
+
+		assert hive.registry_file.log_apply_count == 0
+
+		hive.log_entry_callback = log_entry_counter
+		log_entry_counter.c = 0
+
+		if not reverse:
+			hive.recover_new(log1, log2)
+		else:
+			hive.recover_new(log2, log1)
+
+		assert log_entry_counter.c == 4
+
+		assert hive.registry_file.log_apply_count == 2
+
+		hive.registry_file.file_object.seek(4096)
+		recovered_data_1 = hive.registry_file.file_object.read()
+		md5_1 = md5(recovered_data_1).hexdigest()
+
+		with open(hive_dirty_new1_recovered, 'rb') as f:
+			f.seek(4096)
+			recovered_data_2 = f.read()
+			md5_2 = md5(recovered_data_2).hexdigest()
+
+		assert md5_1 == md5_2
+
+		key_1 = hive.find_key('Key1')
+		key_21 = hive.find_key('Key2\\Key2_1')
+		key_22 = hive.find_key('key2\\key2_2')
+		assert key_1 is None
+		assert key_21 is None
+		assert key_22 is None
+
+		key_3 = hive.find_key('Key3')
+		key_31 = hive.find_key('Key3\\Key3_1')
+		key_32 = hive.find_key('Key3\\Key3_2')
+		key_33 = hive.find_key('key3\\key3_3')
+		assert key_3 is not None
+		assert key_31 is not None
+		assert key_32 is not None
+		assert key_33 is not None
+
+		key_bad = hive.find_key('Key3\\Key3_2\\dont_exist')
+		assert key_bad is None
+
+		value = key_3.value()
+		value_data = value.data()
+		assert len(value_data) == 1441
+		for c in value_data[ : -1]:
+			assert c == '1'
+
+		assert value_data[-1] == '\x00'
+
+def test_dirty_new2():
+	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+
+		assert hive.registry_file.baseblock.validate_checksum()
+		assert hive.registry_file.log_apply_count == 0
+		hive.recover_new(log1, log2)
+		assert hive.registry_file.log_apply_count == 1
+		assert hive.registry_file.last_sequence_number == 5
+
+def test_dirty_old():
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+
+		key_1 = hive.find_key('\\key_with_many_subkeys\\1')
+		assert key_1 is not None
+
+		key_5000_1 = hive.find_key('key_with_many_subkeys\\5000\\find_me_in_log')
+		assert key_5000_1 is None
+
+		value_4500 = hive.find_key('key_with_many_subkeys\\4500').value('v')
+		assert value_4500 is None
+
+		hive.recover_old(log)
+
+		key_1 = hive.find_key('\\key_with_many_subkeys\\1')
+		assert key_1 is None
+
+		key_5000_1 = hive.find_key('key_with_many_subkeys\\5000\\find_me_in_log')
+		assert key_5000_1 is not None
+		timestamp_1 = key_5000_1.last_written_timestamp()
+
+		value_4500 = hive.find_key('key_with_many_subkeys\\4500').value('V')
+		assert value_4500 is not None
+
+		assert value_4500.data() == [ 'a\x00', 'bb\x00', 'ccc\x00', '\x00' ]
+
+		with open(hive_dirty_old_recovered, 'rb') as recovered:
+			hive_r = Registry.RegistryHive(recovered)
+
+			key_5000_1_r = hive_r.find_key('key_with_many_subkeys\\5000\\find_me_in_log')
+			timestamp_2 = key_5000_1_r.last_written_timestamp()
+
+			value_4500_r = hive_r.find_key('key_with_many_subkeys\\4500').value('v')
+
+			assert timestamp_1 == timestamp_2
+			assert value_4500.data() == value_4500_r.data()
+
+def test_dirty_old_rollback_changes():
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+
+		hive.recover_old(log)
+		assert hive.registry_file.log_apply_count == 1
+		hive.rollback_changes()
+		assert hive.registry_file.log_apply_count == 0
+
+		key_1 = hive.find_key('\\key_with_many_subkeys\\1')
+		assert key_1 is not None
+
+		key_5000_1 = hive.find_key('key_with_many_subkeys\\5000\\find_me_in_log')
+		assert key_5000_1 is None
+
+		value_4500 = hive.find_key('key_with_many_subkeys\\4500').value('v')
+		assert value_4500 is None
+
+def test_recovery_not_required():
+	with open(hive_dirty_old_recovered, 'rb') as recovered:
+		hive = Registry.RegistryHive(recovered)
+		dummy = BytesIO()
+
+		with pytest.raises(RegistryFile.RecoveryException):
+			hive.recover_old(dummy)
+
+		with pytest.raises(RegistryFile.RecoveryException):
+			hive.recover_new(dummy)
+
+def test_unicode():
+	with open(hive_unicode, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		key = hive.find_key(u'ПриВет\\КлюЧ')
+		assert key is not None
+		assert key.path() == u'Привет\\Ключ'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key(u'\\ПриВет\\КлюЧ')
+		assert key is not None
+		assert key.path() == u'Привет\\Ключ'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key(u'привет')
+		assert key is not None
+		assert key.path().lower() == u'привет'
+		assert key.path_partial() == key.path()
+
+		key = hive.find_key(u'\\привеТ')
+		assert key is not None
+		assert key.path() == u'Привет'
+		assert key.path_partial() == key.path()
+
+def test_extended_ascii():
+	with open(hive_extended_ascii, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		key = hive.find_key(u'ëigenaardig')
+		assert key is not None
+		assert key.key_node.get_flags() & RegistryRecords.KEY_COMP_NAME > 0
+		assert key.path() == u'ëigenaardig'
+		assert key.path_partial() == key.path()
+
+		value = key.value(u'ëigenaardig')
+		assert value.key_value.get_flags() & RegistryRecords.VALUE_COMP_NAME > 0
+		assert value.data() == u'ëigenaardig\x00'
+
+def test_autorecovery():
+	def convert_tuple(t):
+		assert t.recovered
+		file_objects = t.file_objects
+		assert len(file_objects) < 3 and len(file_objects) > 0
+		if len(file_objects) == 1:
+			return (t.is_new_log, t.file_objects[0])
+		else:
+			return (t.is_new_log, t.file_objects[0], t.file_objects[1])
+
+	dummy = BytesIO()
+
+	with open(hive_dirty_new1, 'rb') as primary, open(hive_dirty_new1_log1, 'rb') as log1, open(hive_dirty_new1_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(dummy, log1, log2)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 2
+		assert len(t) == 3
+		assert t[0]
+		assert t[1] == log1 and t[2] == log2
+
+	with open(hive_dirty_new1, 'rb') as primary, open(hive_dirty_new1_log1, 'rb') as log1, open(hive_dirty_new1_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(None, log1, log2)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 2
+		assert len(t) == 3
+		assert t[0]
+		assert t[1] == log1 and t[2] == log2
+
+	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(dummy, log1, log2)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 3
+		assert t[0]
+		assert t[1] == log1 and t[2] == log2
+
+	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(None, log1, log2)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 3
+		assert t[0]
+		assert t[1] == log1 and t[2] == log2
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(log, dummy, dummy)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(dummy, log, dummy)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(dummy, dummy, log)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(dummy, log, log)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(log, log, log)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(None, dummy, log)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		t = hive.recover_auto(log, None, None)
+		t = convert_tuple(t)
+		assert hive.registry_file.log_apply_count == 1
+		assert len(t) == 2
+		assert not t[0]
+		assert t[1] == log
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(dummy, dummy, dummy)
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(dummy, log, None)
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(dummy, None, log)
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(None, None, log)
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(log, None, log)
+
+def test_invalid_parent():
+	with open(hive_invalid_parent, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.WalkException):
+			for subkey_1 in hive.root_key().subkeys():
+				for subkey_2 in subkey_1.subkeys():
+					pass
+def test_bad_list():
+	with open(hive_bad_list, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.WalkException):
+			for subkey_1 in hive.root_key().subkeys():
+				for subkey_2 in subkey_1.subkeys():
+					pass
+
+def test_bad_subkey():
+	with open(hive_bad_subkey, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.WalkException):
+			for subkey_1 in hive.root_key().subkeys():
+				for subkey_2 in subkey_1.subkeys():
+					pass
+
+def test_access_bits():
+	with open(hive_dirty_new1, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		key = hive.find_key('\\key2\\key2_2')
+		assert key.access_bits() == 2
+
+def test_bad_baseblock():
+	with open(hive_bad_baseblock, 'rb') as primary, open(hive_bad_baseblock_log1, 'rb') as log1, open(hive_bad_baseblock_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+
+		assert hive.registry_file.log_apply_count == 0
+		assert hive.registry_file.baseblock.effective_version == 1
+
+		with pytest.raises(RegistryFile.CellOffsetException):
+			hive.find_key('key_with_many_subkeys')
+
+		t = hive.recover_auto(None, log1, log2)
+
+		assert hive.registry_file.log_apply_count == 1
+		assert hive.registry_file.baseblock.effective_version == 3
+		assert not t.is_new_log
+		assert t.file_objects == [log1]
+		assert hive.find_key('key_with_many_subkeys') is not None
+
+def test_bad_log1():
+	with open(hive_bad_log1, 'rb') as primary, open(hive_bad_log1_log1, 'rb') as log1, open(hive_bad_log1_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(None, log1, log2)
+def test_bad_log2():
+	with open(hive_bad_log2, 'rb') as primary, open(hive_bad_log2_log1, 'rb') as log1, open(hive_bad_log2_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(None, log1, log2)
+
+def test_bad_log3():
+	with open(hive_bad_log3, 'rb') as primary, open(hive_bad_log3_log1, 'rb') as log1, open(hive_bad_log3_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(Registry.AutoRecoveryException):
+			hive.recover_auto(None, log1, log2)
+def test_writable():
+	with open(hive_empty, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+
+		assert not hive.registry_file.writable
+		hive.registry_file.create_writable_file_object()
+		assert hive.registry_file.writable
+		hive.registry_file.discard_writable_file_object()
+
+		assert not hive.registry_file.writable
+		hive.registry_file.create_writable_file_object()
+		assert hive.registry_file.writable
+		hive.registry_file.create_writable_file_object()
+		assert hive.registry_file.writable
+		hive.registry_file.discard_writable_file_object()
+		assert not hive.registry_file.writable
+		hive.registry_file.discard_writable_file_object()
+		hive.registry_file.discard_writable_file_object()
+		hive.registry_file.discard_writable_file_object()
+		hive.registry_file.discard_writable_file_object()
+		assert not hive.registry_file.writable
+
+def test_bogus_keynames():
+	with open(hive_bogus_keynames, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		for k in hive.root_key().subkeys():
+			assert k.name() == 'testnew\r\nne' or k.name() == 'testnu\x00l'
+
+		assert hive.find_key('testnew\r\nne') is not None
+		assert hive.find_key('testnu\x00l') is not None
+
+def test_new_flags():
+	with open(hive_new_flags, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+
+		key_1 = hive.find_key('1')
+		assert key_1 is not None
+		key_2 = hive.find_key('1\\2')
+		assert key_2 is not None
+
+		assert key_1.key_node.get_virtualization_control_flags() == 0
+		assert key_1.key_node.get_user_flags_new() == 0
+		assert key_2.key_node.get_virtualization_control_flags() == 0
+		assert key_2.key_node.get_user_flags_new() == RegistryRecords.KEY_FLAG_32BIT
+		assert key_2.key_node.get_user_flags_old() == 0
+
+def test_multisz():
+	with open(hive_multisz, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		key = hive.find_key('key')
+		value_1 = key.value('1')
+		value_2 = key.value('2')
+		assert key.value() is None
+
+		assert value_1.data() == []
+		l = value_2.data()
+		assert len(l) == 3 and l[0] == u'привет\x00' and l[1] == u'как дела?\x00' and l[2] == '\x00'
+
+def test_strings():
+	with open(hive_strings, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		key = hive.find_key('key')
+
+		assert key.value().data() == u'test тест\x00'
+		assert key.value('1').data() == b'test'
+		assert key.value('2').data() == u'test тест\x00'
+		assert key.value('3').data() == u'test тест \x00'
+
+def test_unicode_garbage():
+	s = b'a\x00b\x00\x00\x00c\x00d\x00'
+	assert Registry.DecodeUnicode(s, True) == u'ab\x00'
+	assert Registry.DecodeUnicode(s, False) == u'ab\x00cd'
+
+	s = b'a\x00b\x00\x00\x00c\x00d\x00e'
+	assert Registry.DecodeUnicode(s, True) == u'ab\x00'
+	with pytest.raises(UnicodeDecodeError):
+		Registry.DecodeUnicode(s, False)
+
+	s = b'a\x00\x00\x00b\x00\x00\x00\x00\x00'
+	assert Registry.DecodeUnicodeMulti(s, True) == u'a\x00b\x00\x00'
+
+def test_security():
+	with open(hive_unicode, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		sec = hive.root_key().security()
+		assert len(sec.descriptor()) == 144
+
+def test_wrong_order():
+	with open(hive_wrong_order, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		c = 0
+		with pytest.raises(Registry.WalkException):
+			for subkey in hive.find_key('1').subkeys():
+				c += 1
+
+		assert c == 1
+
+		with pytest.raises(Registry.WalkException):
+			for subkey in hive.find_key('2').subkeys():
+				c += 1
+
+		assert c == 4
+
+def test_truncated_name():
+	with open(hive_truncated_name, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		with pytest.raises(RegistryRecords.ParseException):
+			for subkey in hive.root_key().subkeys():
+				pass
+
+@pytest.mark.parametrize('walk_everywhere', [True, False])
+def test_unreferenced(walk_everywhere):
+	with open(hive_healed, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		if walk_everywhere:
+			hive.walk_everywhere()
+			assert len(hive.registry_file.cell_map_allocated - hive.registry_file.cell_map_referenced) == 5
+		else:
+			hive.registry_file.build_map_free()
+			assert len(hive.registry_file.cell_map_referenced) == 0
+			assert len(hive.registry_file.cell_map_free) == len(hive.registry_file.cell_map_unallocated)
+
+	with open(hive_bigdata, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		if walk_everywhere:
+			hive.walk_everywhere()
+			assert len(hive.registry_file.cell_map_allocated - hive.registry_file.cell_map_referenced) == 0
+		else:
+			hive.registry_file.build_map_free()
+			assert len(hive.registry_file.cell_map_referenced) == 0
+			assert len(hive.registry_file.cell_map_free) == len(hive.registry_file.cell_map_unallocated)
+
+def test_deleted():
+	with open(hive_deleted_data, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+		cnt_key_values = 0
+		cnt_key_nodes = 0
+		for i in scanner.scan():
+			if type(i) is Registry.RegistryValue:
+				cnt_key_values += 1
+
+				assert i.type_raw() == RegistryRecords.REG_SZ
+
+				if i.name() == 'v2':
+					assert i.data() == '456\x00'
+				elif i.name() == 'v':
+					assert i.data() == '123456\x00'
+				else:
+					assert False
+
+			elif type(i) is Registry.RegistryKey:
+				cnt_key_nodes += 1
+
+				assert i.name() == '456'
+
+				c = 0
+				for v in i.values():
+					c += 1
+					assert v.name() == 'v'
+					assert v.type_raw() == RegistryRecords.REG_SZ
+					assert v.data() == '123456\x00'
+
+				assert c == 1
+
+		assert cnt_key_values == 2
+		assert cnt_key_nodes == 1
+
+	with open(hive_deleted_tree, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+		for i in scanner.scan():
+			assert type(i) is Registry.RegistryKey
+			assert i.path() in [ '1\\2\\3', '1\\2\\3\\4', '1\\2\\3\\4\\5', '1\\2\\3\\4\\New Key #1' ]
+			assert i.path_partial() == i.path()
+
+	with open(hive_healed, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+		for i in scanner.scan():
+			if type(i) is Registry.RegistryKey:
+				assert i.name() == 'cccc'
+				for v in i.values():
+					assert v.name() == '123'
+					assert v.type_raw() == RegistryRecords.REG_SZ
+					assert v.data() == 'test\x00'
+
+			elif type(i) is Registry.RegistryValue:
+				assert i.name() == '123'
+				assert i.type_raw() == RegistryRecords.REG_SZ
+				assert i.data() == 'test\x00'
+
+def test_comp():
+	with open(hive_comp, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		hive.walk_everywhere()
+
+def test_carving():
+	with open(hive_carving0, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+		for i in carver.carve():
+			assert i.offset == 0
+			assert i.size == 8192
+			assert not i.truncated
+			assert i.truncation_scenario == 0
+
+	with open(hive_carving512, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+		for i in carver.carve():
+			assert i.offset == 512
+			assert i.size == 8192
+			assert not i.truncated
+			assert i.truncation_scenario == 0
+
+def test_remnants():
+	with open(hive_remnants, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+
+		c = 0
+		for i in scanner.scan():
+			assert type(i) is Registry.RegistryValue
+			assert i.name() == ''
+			assert i.type_raw() == RegistryRecords.REG_DWORD
+			assert i.data() == 1
+			c += 1
+
+		assert c == 1
+
+def test_truncated():
+	with open(hive_truncated, 'rb') as f:
+		hive = Registry.RegistryHiveTruncated(f)
+
+		for i in hive.scan():
+			assert type(i) is Registry.RegistryKey
+			assert i.name() in [ '{6214ff27-7b1b-41a3-9ae4-5fb851ffed63}', 'key_with_many_subkeys' ] or int(i.name()) > 0
+
+def test_effective_hbins_data_size():
+	with open(hive_effective_size, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		assert hive.registry_file.baseblock.effective_hbins_data_size == 487424
+		assert hive.registry_file.baseblock.get_hbins_data_size() != hive.registry_file.baseblock.effective_hbins_data_size
+
+def test_log_discovery():
+	for i in range(len(log_discovery)):
+		p = log_discovery[i]
+		a = RegistryHelpers.DiscoverLogFiles(p)
+
+		assert a is not None
+
+		if i == 0:
+			assert path.normcase(path.basename(a.log_path)) == path.normcase('aa.LOG')
+			assert path.normcase(path.basename(a.log1_path)) == path.normcase('aa.LOG1')
+			assert path.normcase(path.basename(a.log2_path)) == path.normcase('aa.LOG2')
+		elif i == 1:
+			assert a.log_path is None
+			assert path.normcase(path.basename(a.log1_path)) == path.normcase('aa.LOG1')
+			assert path.normcase(path.basename(a.log2_path)) == path.normcase('aa.LOG2')
+		elif i == 2:
+			assert path.normcase(path.basename(a.log_path)) == path.normcase('aa.log')
+			assert path.normcase(path.basename(a.log1_path)) == path.normcase('aa.log1')
+			assert a.log2_path is None
+		elif i == 3:
+			assert path.normcase(path.basename(a.log_path)) == path.normcase('aa.LOG')
+
+			# These properties should be None if the file system is case-sensitive.
+			assert a.log1_path is None or path.normcase(path.basename(a.log1_path)) == path.normcase('aa.log1')
+			assert a.log2_path is None or path.normcase(path.basename(a.log2_path)) == path.normcase('aa.log2')
+		elif i == 4:
+			assert a.log_path is None
+			assert a.log1_path is None
+			assert a.log2_path is None
+		else:
+			assert False
+
+def test_deleted_tree_no_root_flag():
+	with open(hive_deleted_tree_no_root_flag, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		assert hive.root_key().key_node.get_flags() & RegistryRecords.KEY_HIVE_ENTRY == 0
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+		for i in scanner.scan():
+			assert type(i) is Registry.RegistryKey
+			assert i.path() in [ '1\\2\\3', '1\\2\\3\\4', '1\\2\\3\\4\\5', '1\\2\\3\\4\\New Key #1' ]
+			assert i.path_partial() == i.path()
+
+def test_deleted_tree_partial_path():
+	with open(hive_deleted_tree_partial_path, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		scanner = RegistryRecover.Scanner(hive)
+		for i in scanner.scan():
+			assert type(i) is Registry.RegistryKey
+			assert i.path_partial() in [ '3', '3\\4', '3\\4\\5', '3\\4\\New Key #1' ]
+
+def test_flags_converter():
+	cases = [
+		{'log_entry_flags': 0, 'baseblock_flags': 0, 'result': 0},
+		{'log_entry_flags': 1, 'baseblock_flags': 0, 'result': 1},
+		{'log_entry_flags': 1, 'baseblock_flags': 1, 'result': 1},
+		{'log_entry_flags': 0, 'baseblock_flags': 1, 'result': 0},
+		{'log_entry_flags': 0, 'baseblock_flags': 3, 'result': 2},
+		{'log_entry_flags': 1, 'baseblock_flags': 3, 'result': 3},
+		{'log_entry_flags': 1, 'baseblock_flags': 2, 'result': 3}
+	]
+
+	for case in cases:
+		assert RegistryFile.LogEntryFlagsToBaseBlockFlags(case['log_entry_flags'], case['baseblock_flags']) == case['result']
+
+def test_hive_save():
+	def check_saved_hive(filepath):
+		with open(filepath, 'rb') as recovered:
+			hive_recovered = Registry.RegistryHive(recovered)
+			assert not hive_recovered.registry_file.baseblock.is_file_dirty
+			hive_recovered.walk_everywhere()
+
+	tmp_file = path.join(HIVES_DIR, 'temphive_delete_me')
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		with pytest.raises(RegistryFile.NotSupportedException):
+			hive.registry_file.save_recovered_hive(tmp_file)
+
+	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
+		hive = Registry.RegistryHive(primary)
+		hive.recover_old(log)
+		hive.registry_file.save_recovered_hive(tmp_file)
+		check_saved_hive(tmp_file)
+
+	with open(hive_dirty_new1, 'rb') as primary, open(hive_dirty_new1_log1, 'rb') as log1, open(hive_dirty_new1_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		hive.recover_new(log1, log2)
+		hive.registry_file.save_recovered_hive(tmp_file)
+		check_saved_hive(tmp_file)
+
+	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		hive.recover_new(log1, log2)
+		hive.registry_file.save_recovered_hive(tmp_file)
+		check_saved_hive(tmp_file)
+
+	with open(hive_bad_baseblock, 'rb') as primary, open(hive_bad_baseblock_log1, 'rb') as log1, open(hive_bad_baseblock_log2, 'rb') as log2:
+		hive = Registry.RegistryHive(primary)
+		hive.recover_auto(None, log1, log2)
+		hive.registry_file.save_recovered_hive(tmp_file)
+		check_saved_hive(tmp_file)
+
+	remove(tmp_file)
+
+def test_slack():
+	with open(record_nk, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.KeyNode(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_vk, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.KeyValue(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_sk, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.KeySecurity(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_li, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.IndexLeaf(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_lh, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.HashLeaf(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_lf, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.FastLeaf(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_ri, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.IndexRoot(buf)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_list, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.KeyValuesList(buf, 3)
+		assert r.get_slack() == b'SLCK'
+
+		r = RegistryRecords.SegmentsList(buf, 3)
+		assert r.get_slack() == b'SLCK'
+
+	with open(record_db, 'rb') as f:
+		buf = f.read()
+		r = RegistryRecords.BigData(buf)
+		assert r.get_slack() == b'SLCK'
+
+def test_hive_slack():
+	with open(hive_slack, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		assert len(hive.effective_slack) == 0
+		hive.walk_everywhere()
+		assert len(hive.effective_slack) > 0
+		assert b'SLCK' in hive.effective_slack

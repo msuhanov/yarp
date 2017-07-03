@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+# yarp: yet another registry parser
+# (c) Maxim Suhanov
+
+from yarp import RegistryCarve
+import argparse
+from collections import namedtuple
+import os
+import sys
+
+PROGRAM_NAME = 'yarp-carver'
+PROGRAM_VERSION = '1.0.0-beta1'
+
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
+
+def parse_args():
+	"""Parse command line arguments and return a named tuple (Arguments)."""
+
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry files from a disk image (or a similar source).', add_help = False, prefix_chars = '-')
+
+	group_main = parser.add_argument_group('Main arguments')
+	group_misc = parser.add_argument_group('Miscellaneous arguments')
+
+	group_main.add_argument('file', help = 'a disk image')
+	group_main.add_argument('outdir', help = 'an output directory')
+
+	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
+	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
+
+	parsed_args = parser.parse_args()
+
+	source_file = parsed_args.file
+	output_dir = parsed_args.outdir
+
+	return Arguments(source_file = source_file, output_dir = output_dir)
+
+def make_sane_filename(filename):
+	for bad_char in [ '\x00', '/', '\\', ':' ]:
+		filename = filename.replace(bad_char, '')
+
+	if filename == '':
+		filename = 'unknown'
+
+	return filename
+
+args = parse_args()
+
+if not os.path.isdir(args.output_dir):
+	print('Output directory does not exist: {}'.format(args.output_dir), file = sys.stderr)
+	sys.exit(255)
+
+try:
+	f = open(args.source_file, 'rb')
+except (OSError, IOError):
+	print('Source file cannot be opened: {}'.format(args.source_file), file = sys.stderr)
+	sys.exit(255)
+
+carver = RegistryCarve.Carver(f)
+print('Offset\tSize\tTruncated\tFile name')
+for carve_result in carver.carve():
+	print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
+
+	regf_filename = carve_result.filename
+	if regf_filename.rfind('\\') != -1:
+		regf_filename = regf_filename.split('\\')[-1]
+	regf_filename = make_sane_filename(regf_filename)
+
+	if carve_result.truncated:
+		output_filename = '{}_{}-truncated'.format(carve_result.offset, regf_filename)
+	else:
+		output_filename = '{}_{}'.format(carve_result.offset, regf_filename)
+
+	output_file = os.path.join(args.output_dir, output_filename)
+
+	with open(output_file, 'wb') as out_f:
+		f.seek(carve_result.offset)
+		buf = f.read(carve_result.size)
+		out_f.write(buf)
+
+f.close()

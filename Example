@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+from yarp import *
+
+# A primary file is specified here.
+primary_path = '<...>/SYSTEM'
+
+# Discover transaction log files to be used to recover the primary file, if required.
+transaction_logs = RegistryHelpers.DiscoverLogFiles(primary_path)
+
+# Open the primary file and each transaction log file discovered.
+primary_file = open(primary_path, 'rb')
+
+if transaction_logs.log_path is not None:
+	log_file = open(transaction_logs.log_path, 'rb')
+else:
+	log_file = None
+
+if transaction_logs.log1_path is not None:
+	log1_file = open(transaction_logs.log1_path, 'rb')
+else:
+	log1_file = None
+
+if transaction_logs.log2_path is not None:
+	log2_file = open(transaction_logs.log2_path, 'rb')
+else:
+	log2_file = None
+
+# Open the hive and recover it, if required.
+hive = Registry.RegistryHive(primary_file)
+recovery_result = hive.recover_auto(log_file, log1_file, log2_file)
+if recovery_result.recovered:
+	print('The hive has been recovered')
+
+# Print basic information about the hive.
+print('Last written timestamp: {}'.format(hive.last_written_timestamp()))
+print('Last reorganized timestamp: {}'.format(hive.last_reorganized_timestamp()))
+
+# Find an existing key.
+key = hive.find_key('controlset001\\services')
+print('Found a key: {}'.format(key.path()))
+
+# Print information about its subkeys.
+for sk in key.subkeys():
+	print(sk)
+
+# Pick an existing subkey.
+key = key.subkey('exfat')
+
+# Print information about it.
+print('Found a subkey: {}'.format(key.name()))
+print('Last written timestamp: {}'.format(key.last_written_timestamp()))
+
+# Print information about its values.
+for v in key.values():
+	print(v)
+
+# Pick an existing value.
+v = key.value('description')
+
+# Print more information about this value.
+print('Some information about a specific value:')
+print('Value name is \'{}\''.format(v.name()))
+print('Value type is {} as a string (or {} as an integer)'.format(v.type_str(), v.type_raw()))
+print('Value data is:')
+print(v.data())
+print('The same data as raw bytes:')
+print(v.data_raw())
+
+# Close everything.
+hive = None
+primary_file.close()
+if log_file is not None:
+	log_file.close()
+if log1_file is not None:
+	log1_file.close()
+if log2_file is not None:
+	log2_file.close()
