@@ -29,5 +29,9 @@ For a basic usage example, see the 'Example' file.
 This project is made available under the terms of the GNU GPL, version 3.
 See the 'License' file.
 
+5. Installation
+
+# pip3 install https://github.com/msuhanov/yarp/archive/1.0.0-beta2.tar.gz
+
 ---
 (c) Maxim Suhanov

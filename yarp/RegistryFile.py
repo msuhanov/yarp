@@ -1275,6 +1275,11 @@ class PrimaryFileTruncated(object):
 		cell_file_offset = BASE_BLOCK_LENGTH_PRIMARY + cell_relative_offset
 
 		cell = HiveCell(self.file_object, cell_file_offset, self.baseblock.use_old_cell_format)
+
+		size = cell.get_absolute_size()
+		if size > CELL_SIZE_MAX_NAIVE:
+			raise CellOffsetException('Got an obviously invalid offset (relative)')
+
 		return cell.get_cell_data()
 
 	def cells(self, yield_unallocated_cells = False):
