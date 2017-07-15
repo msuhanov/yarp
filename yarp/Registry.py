@@ -311,8 +311,8 @@ class RegistryKey(object):
 	effective_slack = None
 	"""A set of data strings from different slack space locations to be used in the deleted data recovery."""
 
-	def __init__(self, primary_file, buf, layer, relative_cell_offset, tolerate_minor_errors = False, naive = False):
-		"""When working with deleted registry keys, set 'naive' to True, 'relative_cell_offset' and 'layer' to None.
+	def __init__(self, primary_file, buf, layer, cell_relative_offset, tolerate_minor_errors = False, naive = False):
+		"""When working with deleted registry keys, set 'naive' to True, 'cell_relative_offset' and 'layer' to None.
 		For a root key, set 'layer' to 0 (increment 'layer' by one when going to subkeys of a current key and decrement it by one when going to a parent key).
 		"""
 
@@ -324,7 +324,7 @@ class RegistryKey(object):
 			self.get_cell = self.registry_file.get_cell_naive
 
 		self.key_node = RegistryRecords.KeyNode(buf)
-		self.relative_cell_offset = relative_cell_offset
+		self.cell_relative_offset = cell_relative_offset
 		self.layer = layer
 		self.tolerate_minor_errors = tolerate_minor_errors
 		self.effective_slack = set()
@@ -376,7 +376,7 @@ class RegistryKey(object):
 			# This is the root key.
 			return
 
-		if self.layer is None and (self.key_node.get_flags() & RegistryRecords.KEY_HIVE_ENTRY > 0 or self.relative_cell_offset == self.registry_file.baseblock.effective_root_cell_offset):
+		if self.layer is None and (self.key_node.get_flags() & RegistryRecords.KEY_HIVE_ENTRY > 0 or self.cell_relative_offset == self.registry_file.baseblock.effective_root_cell_offset):
 			# This is the root key.
 			return
 
@@ -482,7 +482,7 @@ class RegistryKey(object):
 
 					buf = self.get_cell(subkey_offset)
 					subkey = RegistryKey(self.registry_file, buf, layer_down, subkey_offset, self.tolerate_minor_errors, self.naive)
-					if self.relative_cell_offset is not None and subkey.key_node.get_parent() != self.relative_cell_offset:
+					if self.cell_relative_offset is not None and subkey.key_node.get_parent() != self.cell_relative_offset:
 						if not self.naive:
 							raise WalkException('Key node does not point to a valid parent key node, key path: {}, name: {}'.format(self.path(), subkey.name()))
 						else:
@@ -497,7 +497,7 @@ class RegistryKey(object):
 
 					buf = self.get_cell(subkey_offset)
 					subkey = RegistryKey(self.registry_file, buf, layer_down, subkey_offset, self.tolerate_minor_errors, self.naive)
-					if self.relative_cell_offset is not None and subkey.key_node.get_parent() != self.relative_cell_offset:
+					if self.cell_relative_offset is not None and subkey.key_node.get_parent() != self.cell_relative_offset:
 						if not self.naive:
 							raise WalkException('Key node does not point to a valid parent key node, key path: {}, name: {}'.format(self.path(), subkey.name()))
 						else:
@@ -512,7 +512,7 @@ class RegistryKey(object):
 
 					buf = self.get_cell(subkey_offset)
 					subkey = RegistryKey(self.registry_file, buf, layer_down, subkey_offset, self.tolerate_minor_errors, self.naive)
-					if self.relative_cell_offset is not None and subkey.key_node.get_parent() != self.relative_cell_offset:
+					if self.cell_relative_offset is not None and subkey.key_node.get_parent() != self.cell_relative_offset:
 						if not self.naive:
 							raise WalkException('Key node does not point to a valid parent key node, key path: {}, name: {}'.format(self.path(), subkey.name()))
 						else:
@@ -812,7 +812,7 @@ class RegistryValue(object):
 			return 'RegistryValue, default value (no name), data type: {}, data size: {}'.format(self.type_str(), self.data_size())
 
 class RegistryHiveTruncated(object):
-	"""This is a high-level class for a truncated registry hive."""
+	"""This is a high-level class for a truncated registry hive. This class should used as a replacement for the RegistryHive class."""
 
 	registry_file = None
 	"""A primary file of a hive (a RegistryFile.PrimaryFileTruncated object)."""

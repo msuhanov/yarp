@@ -1195,7 +1195,9 @@ class PrimaryFile(object):
 			self.apply_new_log_file(second, callback) # This is how Windows works.
 
 class PrimaryFileTruncated(object):
-	"""This is a class for a truncated primary file, it provides methods to read the truncated file, to build the maps of cells, and to yield each cell."""
+	"""This is a class for a truncated primary file, it provides methods to read the truncated file, to build the maps of cells, and to yield each cell.
+	This class should used as a replacement for the PrimaryFile class.
+	"""
 
 	file = None
 	"""A RegistryFile object for a primary file."""
