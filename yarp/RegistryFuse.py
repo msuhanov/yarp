@@ -475,6 +475,10 @@ class YarpFS(llfuse.Operations):
 		return self._yarp_construct_attr(inode)
 
 	def open(self, inode, flags, ctx):
+		flags_writable = os.O_WRONLY | os.O_RDWR | os.O_APPEND
+		if flags & flags_writable > 0:
+			raise llfuse.FUSEError(errno.EROFS)
+
 		return self._yarp_cell_relative_offset_to_handle(inode)
 
 	def opendir(self, inode, ctx):
