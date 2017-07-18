@@ -324,7 +324,7 @@ class YarpFS(llfuse.Operations):
 				else:
 					curr_name = Registry.DecodeUnicode(subkey.get_key_name())
 
-				if curr_name.upper() == name.upper():
+				if curr_name == name:
 					return self._yarp_construct_attr(relative_offset)
 
 		# Search in values.
@@ -339,7 +339,7 @@ class YarpFS(llfuse.Operations):
 				else:
 					curr_name = Registry.DecodeUnicode(value.get_value_name())
 
-				if curr_name.upper() == name.upper():
+				if curr_name == name:
 					return self._yarp_construct_attr(relative_offset)
 
 		raise llfuse.FUSEError(errno.ENOENT)
@@ -393,8 +393,8 @@ class YarpFS(llfuse.Operations):
 		attr.st_ino = cell_relative_offset
 		attr.generation = 0
 
-		attr.entry_timeout = 15
-		attr.attr_timeout = 15
+		attr.entry_timeout = 300
+		attr.attr_timeout = 300
 
 		attr.st_nlink = 1
 
