@@ -406,7 +406,10 @@ class YarpFS(llfuse.Operations):
 			key_node = RegistryRecords.KeyNode(buf)
 
 			ts_filetime = key_node.get_last_written_timestamp()
-			attr.st_mtime_ns = self._yarp_convert_timestamp(ts_filetime)
+			try:
+				attr.st_mtime_ns = self._yarp_convert_timestamp(ts_filetime)
+			except (ValueError, OverflowError):
+				attr.st_mtime_ns = 0
 		else:
 			attr.st_mode = (stat.S_IFREG | 0o644)
 			attr.st_mtime_ns = 0

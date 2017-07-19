@@ -1,3 +1,9 @@
+Version: 1.0.0-beta7
+
+RegistryFuse: work around invalid timestamps.
+
+---
+
 Version: 1.0.0-beta6
 
 RegistryFuse: resolve the EINVAL bug.
