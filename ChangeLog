@@ -1,3 +1,9 @@
+Version: 1.0.0-beta6
+
+RegistryFuse: resolve the EINVAL bug.
+
+---
+
 Version: 1.0.0-beta5
 
 Minor update.

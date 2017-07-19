@@ -429,7 +429,7 @@ class YarpFS(llfuse.Operations):
 		return attr
 
 	def _yarp_cell_relative_offset_to_handle(self, cell_relative_offset):
-		self._yarp_cell_relative_offsets.add(cell_relative_offset)
+		self._yarp_cell_relative_offsets.append(cell_relative_offset)
 		return cell_relative_offset
 
 	def _yarp_release_handle(self, handle):
@@ -451,8 +451,8 @@ class YarpFS(llfuse.Operations):
 		# Pick the get_cell() method.
 		self._yarp_get_cell_worker = self._yarp_primary.get_cell
 
-		# Create a set for cell relative offsets (to track handles).
-		self._yarp_cell_relative_offsets = set()
+		# Create a list for cell relative offsets (to track handles).
+		self._yarp_cell_relative_offsets = []
 
 	def destroy(self):
 		# Close the primary file.
