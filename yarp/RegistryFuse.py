@@ -255,10 +255,12 @@ class YarpFS(llfuse.Operations):
 					yield (curr_name, self._yarp_construct_attr(relative_offset))
 
 		# Parse values.
-		if key_node.get_key_values_count() > 0:
+		values_count = key_node.get_key_values_count()
+
+		if values_count > 0 and key_node.get_flags() & RegistryRecords.KEY_PREDEF_HANDLE == 0:
 			list_offset = key_node.get_key_values_list_offset()
 			list_buf = self._yarp_get_cell(list_offset)
-			values_list = RegistryRecords.KeyValuesList(list_buf, key_node.get_key_values_count())
+			values_list = RegistryRecords.KeyValuesList(list_buf, values_count)
 			for relative_offset in values_list.elements():
 				if skipped < skip:
 					skipped += 1
@@ -347,10 +349,12 @@ class YarpFS(llfuse.Operations):
 					return self._yarp_construct_attr(relative_offset)
 
 		# Search in values.
-		if key_node.get_key_values_count() > 0 and (record_type == 0 or record_type == 2):
+		values_count = key_node.get_key_values_count()
+
+		if values_count > 0 and key_node.get_flags() & RegistryRecords.KEY_PREDEF_HANDLE == 0 and (record_type == 0 or record_type == 2):
 			list_offset = key_node.get_key_values_list_offset()
 			list_buf = self._yarp_get_cell(list_offset)
-			values_list = RegistryRecords.KeyValuesList(list_buf, key_node.get_key_values_count())
+			values_list = RegistryRecords.KeyValuesList(list_buf, values_count)
 			for relative_offset in values_list.elements():
 				value = RegistryRecords.KeyValue(self._yarp_get_cell(relative_offset))
 				if self._yarp_version > 1 and value.get_flags() & RegistryRecords.VALUE_COMP_NAME > 0:
