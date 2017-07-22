@@ -7,10 +7,12 @@ import os
 import stat
 import errno
 
+CACHE_SUBKEYS_COUNT = 500 # If a key has more subkeys than this number, cache the subkeys.
+
 class YarpFS(llfuse.Operations):
 	"""This is an implementation of a FUSE file system (llfuse) for a registry hive."""
 
-	def __init__(self, primary_path, character_encoding = 'utf-8'):
+	def __init__(self, primary_path, enable_cache = True, character_encoding = 'utf-8'):
 		super(YarpFS, self).__init__()
 
 		# Open the primary file.
@@ -42,6 +44,10 @@ class YarpFS(llfuse.Operations):
 			pass
 
 		self._yarp_conflicts = dict()
+
+		# Set up the cache.
+		self._yarp_cache = dict()
+		self._enable_cache = enable_cache
 
 		# Check if the hive is consistent and fill the conflicts set.
 		self._yarp_validate_hive(registry_hive)
@@ -77,6 +83,8 @@ class YarpFS(llfuse.Operations):
 				v_set.add(value.name())
 				value_data_raw = value.data_raw()
 
+			do_cache = key.subkeys_count() > CACHE_SUBKEYS_COUNT
+
 			for subkey in key.subkeys():
 				sk_name = subkey.name()
 				if sk_name in v_set:
@@ -84,6 +92,12 @@ class YarpFS(llfuse.Operations):
 						self._yarp_conflicts[key.cell_relative_offset].append(sk_name)
 					else:
 						self._yarp_conflicts[key.cell_relative_offset] = [sk_name]
+
+				if self._enable_cache and do_cache:
+					if key.cell_relative_offset in self._yarp_cache.keys():
+						self._yarp_cache[key.cell_relative_offset][sk_name] = subkey.cell_relative_offset
+					else:
+						self._yarp_cache[key.cell_relative_offset] = { sk_name: subkey.cell_relative_offset }
 
 				process_key(subkey)
 
@@ -183,7 +197,7 @@ class YarpFS(llfuse.Operations):
 
 	def _yarp_parse(self, cell_relative_offset, skip = 0):
 		if not self._yarp_is_key(cell_relative_offset):
-			raise llfuse.FUSEError(errno.ENOENT)
+			raise llfuse.FUSEError(errno.EBADF)
 
 		buf = self._yarp_get_cell(cell_relative_offset)
 		key_node = RegistryRecords.KeyNode(buf)
@@ -259,9 +273,7 @@ class YarpFS(llfuse.Operations):
 
 	def _yarp_lookup_by_name(self, cell_relative_offset, name):
 		if not self._yarp_is_key(cell_relative_offset):
-			raise llfuse.FUSEError(errno.ENOENT)
-
-		name = name.decode(self._yarp_encoding)
+			raise llfuse.FUSEError(errno.EBADF)
 
 		buf = self._yarp_get_cell(cell_relative_offset)
 		key_node = RegistryRecords.KeyNode(buf)
@@ -271,13 +283,18 @@ class YarpFS(llfuse.Operations):
 			return self._yarp_construct_attr(cell_relative_offset)
 
 		if name == '..':
-			if cell_relative_offset != self._yarp_root_cell_offset:
+			if cell_relative_offset != self._yarp_root_cell_offset and cell_relative_offset != llfuse.ROOT_INODE:
 				return self._yarp_construct_attr(key_node.get_parent())
 			else:
 				raise llfuse.FUSEError(errno.ENOENT)
 
 		# The usual case.
 		name, record_type = self._yarp_deposixify_name(name)
+
+		# Check the cache first.
+		if self._enable_cache and cell_relative_offset in self._yarp_cache.keys():
+			cached_offset = self._yarp_cache[cell_relative_offset][name]
+			return self._yarp_construct_attr(cached_offset)
 
 		# Search in subkeys.
 		if key_node.get_subkeys_count() > 0 and (record_type == 0 or record_type == 1):
@@ -346,7 +363,7 @@ class YarpFS(llfuse.Operations):
 
 	def _yarp_parse_data(self, cell_relative_offset):
 		if not self._yarp_is_value(cell_relative_offset):
-			raise llfuse.FUSEError(errno.ENOENT)
+			raise llfuse.FUSEError(errno.EBADF)
 
 		buf = self._yarp_get_cell(cell_relative_offset)
 		key_value = RegistryRecords.KeyValue(buf)
@@ -386,7 +403,7 @@ class YarpFS(llfuse.Operations):
 
 	def _yarp_construct_attr(self, cell_relative_offset):
 		if not self._yarp_is_virtual_inode(cell_relative_offset):
-			raise llfuse.FUSEError(errno.ENOENT)
+			raise llfuse.FUSEError(errno.EBADF)
 
 		attr = llfuse.EntryAttributes()
 
@@ -435,14 +452,15 @@ class YarpFS(llfuse.Operations):
 		self._yarp_cell_relative_offsets.append(cell_relative_offset)
 		return cell_relative_offset
 
-	def _yarp_release_handle(self, handle):
-		self._yarp_cell_relative_offsets.remove(self._yarp_handle_to_cell_relative_offset(handle))
-
 	def _yarp_handle_to_cell_relative_offset(self, handle):
 		if handle not in self._yarp_cell_relative_offsets:
-			raise llfuse.FUSEError(errno.EINVAL)
+			raise llfuse.FUSEError(errno.EBADF)
 
 		return handle
+
+	def _yarp_release_handle(self, handle):
+		cell_relative_offset = self._yarp_handle_to_cell_relative_offset(handle)
+		self._yarp_cell_relative_offsets.remove(cell_relative_offset)
 
 	def init(self):
 		# Pick the effective version.
@@ -488,6 +506,7 @@ class YarpFS(llfuse.Operations):
 		return self._yarp_cell_relative_offset_to_handle(inode)
 
 	def lookup(self, parent_inode, name, ctx):
+		name = name.decode(self._yarp_encoding)
 		return self._yarp_lookup_by_name(parent_inode, name)
 
 	def read(self, fh, off, size):
@@ -495,8 +514,10 @@ class YarpFS(llfuse.Operations):
 		return data[off : off + size]
 
 	def readdir(self, fh, off):
+		cell_relative_offset = self._yarp_handle_to_cell_relative_offset(fh)
+
 		i = off
-		for name, attr in self._yarp_parse(self._yarp_handle_to_cell_relative_offset(fh), off):
+		for name, attr in self._yarp_parse(cell_relative_offset, off):
 			yield (name.encode(self._yarp_encoding), attr, i + 1)
 			i += 1
 

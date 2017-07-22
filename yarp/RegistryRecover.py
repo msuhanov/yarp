@@ -79,7 +79,7 @@ class Scanner(object):
 					try:
 						key = Registry.RegistryKey(self.hive.registry_file, candidate_nk, None, None, True, True)
 						ValidateKey(key)
-					except (Registry.RegistryException, UnicodeDecodeError):
+					except (Registry.RegistryException, UnicodeDecodeError, ValueError, OverflowError):
 						pass
 					else:
 						yield key

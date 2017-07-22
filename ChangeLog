@@ -1,3 +1,10 @@
+Version: 1.0.0-beta8
+
+RegistryRecover: handle invalid timestamps.
+RegistryFuse: add a cache, fix error codes.
+
+---
+
 Version: 1.0.0-beta7
 
 RegistryFuse: work around invalid timestamps.
