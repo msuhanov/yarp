@@ -292,7 +292,7 @@ class YarpFS(llfuse.Operations):
 		name, record_type = self._yarp_deposixify_name(name)
 
 		# Check the cache first.
-		if self._enable_cache and cell_relative_offset in self._yarp_cache.keys():
+		if self._enable_cache and cell_relative_offset in self._yarp_cache.keys() and name in self._yarp_cache[cell_relative_offset].keys():
 			cached_offset = self._yarp_cache[cell_relative_offset][name]
 			return self._yarp_construct_attr(cached_offset)
 
