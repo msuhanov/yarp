@@ -1,6 +1,8 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
+from __future__ import unicode_literals
+
 from . import Registry, RegistryFile, RegistryRecords, RegistryHelpers
 import llfuse
 import os

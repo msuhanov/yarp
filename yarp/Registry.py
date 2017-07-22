@@ -1,7 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
-from __future__ import unicode_literals
+from __future__ import unicode_literals, division
 
 from .RegistryFile import RegistryException
 from . import RegistryFile
