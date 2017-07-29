@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-print'
-PROGRAM_VERSION = '1.0.0-beta10'
+PROGRAM_VERSION = '1.0.0-beta11'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'do_recovery', 'do_deleted' ])
 
@@ -172,7 +172,7 @@ def print_deleted_key(key):
 	try:
 		for value in key.values():
 			print_deleted_value(value)
-	except Registry.RegistryException:
+	except (Registry.RegistryException, UnicodeDecodeError):
 		pass
 
 	print('---')
