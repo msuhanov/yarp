@@ -812,7 +812,7 @@ class RegistryValue(object):
 			return 'RegistryValue, default value (no name), data type: {}, data size: {}'.format(self.type_str(), self.data_size())
 
 class RegistryHiveTruncated(object):
-	"""This is a high-level class for a truncated registry hive. This class should used as a replacement for the RegistryHive class."""
+	"""This is a high-level class for a truncated registry hive. This class should be used as a replacement for the RegistryHive class."""
 
 	registry_file = None
 	"""A primary file of a hive (a RegistryFile.PrimaryFileTruncated object)."""

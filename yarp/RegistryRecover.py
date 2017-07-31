@@ -44,9 +44,10 @@ class Scanner(object):
 	"""A RegistryHive object."""
 
 	def __init__(self, hive, scan_remnant_data = True, scan_slack_space = True):
-		"""Argument:
+		"""Arguments:
 		 - hive: a RegistryHive object;
-		 - scan_remnant_data: when True, also scan remnant data within a primary file.
+		 - scan_remnant_data: when True, also scan the remnant data within a primary file;
+		 - scan_slack_space: when True, also scan the slack space of cells.
 		"""
 
 		self.hive = hive

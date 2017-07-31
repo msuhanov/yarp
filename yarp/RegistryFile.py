@@ -1196,7 +1196,7 @@ class PrimaryFile(object):
 
 class PrimaryFileTruncated(object):
 	"""This is a class for a truncated primary file, it provides methods to read the truncated file, to build the maps of cells, and to yield each cell.
-	This class should used as a replacement for the PrimaryFile class.
+	This class should be used as a replacement for the PrimaryFile class.
 	"""
 
 	file = None
