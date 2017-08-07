@@ -34,8 +34,12 @@ def ValidateValue(Value):
 	if len(value_name) > MAX_PLAUSIBLE_NAME_LENGTH:
 		raise Registry.RegistryException('Implausible name length')
 
-	if Value.key_value.is_data_inline() and Value.key_value.get_data_size_real() > 4:
-		raise Registry.RegistryException('Value data is too large to be stored inline')
+	if Value.key_value.is_data_inline():
+		if Value.key_value.get_data_size_real() > 4:
+			raise Registry.RegistryException('Value data is too large to be stored inline')
+	else:
+		if Value.key_value.get_data_size_real() > 0 and Value.key_value.get_data_offset() % 8 != 0:
+			raise Registry.RegistryException('Data offset (relative) is unaligned')
 
 class Scanner(object):
 	"""This class is used to scan free cells for deleted keys and values."""

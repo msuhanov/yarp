@@ -1,3 +1,9 @@
+Version: 1.0.0-beta13
+
+RegistryRecover: validate the data offset of a deleted value.
+
+---
+
 Version: 1.0.0-beta12
 
 Minor update.
