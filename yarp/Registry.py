@@ -837,9 +837,8 @@ class RegistryHiveTruncated(object):
 		"""This method yields RegistryKey objects for keys and RegistryValue objects for values."""
 
 		for cell in self.registry_file.cells():
-			cell_absolute_size = cell.get_absolute_size()
-			if cell_absolute_size > 76: # A key node with at least one character in the name.
-				cell_data = cell.get_cell_data()
+			cell_data = cell.get_cell_data()
+			if len(cell_data) > 76: # A key node with at least one character in the name.
 				try:
 					key = RegistryKey(self.registry_file, cell_data, None, None, True, False)
 					key_name = key.name()
@@ -847,8 +846,9 @@ class RegistryHiveTruncated(object):
 					pass
 				else:
 					yield key
-			elif cell_absolute_size >= 20: # A key value with no name (at least).
-				cell_data = cell.get_cell_data()
+					continue
+
+			if len(cell_data) >= 20: # A key value with no name (at least).
 				try:
 					value = RegistryValue(self.registry_file, cell_data, False)
 					value_name = value.name()
