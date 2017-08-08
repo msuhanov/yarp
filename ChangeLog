@@ -1,3 +1,9 @@
+Version: 1.0.0-beta15
+
+Minor update.
+
+---
+
 Version: 1.0.0-beta14
 
 Registry: add proper checks for keys and values in truncated hives.
