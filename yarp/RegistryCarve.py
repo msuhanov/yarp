@@ -56,7 +56,7 @@ def CheckHiveBin(Buffer, ExpectedOffsetRelative):
 	return HiveBinCheckResult(is_valid = False, size = None)
 
 def CheckCellsOfHiveBin(Buffer, OldCells = False):
-	"""Check if Buffer contains a hive bin with valid cells (new format), return a named tuple (CellsCheckResult). A hive bin's header is not checked."""
+	"""Check if Buffer contains a hive bin with valid cells, return a named tuple (CellsCheckResult). A hive bin's header is not checked."""
 
 	curr_pos_relative = 32
 	while curr_pos_relative < len(Buffer):
