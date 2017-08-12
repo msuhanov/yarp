@@ -585,10 +585,10 @@ class RegistryKey(object):
 		"""This method returns a subkey by its name (a RegistryKey object) or None, if not found."""
 
 		name = name.lower()
-		for current_subkey in self.subkeys():
-			curr_name = current_subkey.name().lower()
+		for curr_subkey in self.subkeys():
+			curr_name = curr_subkey.name().lower()
 			if name == curr_name:
-				return current_subkey
+				return curr_subkey
 
 	def subkeys_count(self):
 		"""Get and return a number of subkeys. Volatile subkeys are not counted."""
@@ -613,6 +613,11 @@ class RegistryKey(object):
 			for value_offset in values_list.elements():
 				buf = self.get_cell(value_offset)
 				curr_value = RegistryValue(self.registry_file, buf, self.naive)
+
+				slack_list = curr_value.data_slack()
+				for curr_slack in slack_list:
+					self.effective_slack.add(curr_slack)
+
 				curr_name = curr_value.name().lower()
 				if curr_name not in values_names:
 					values_names.add(curr_name)
@@ -631,7 +636,6 @@ class RegistryKey(object):
 		"""
 
 		name = name.lower()
-
 		for curr_value in self.values():
 			curr_name = curr_value.name().lower()
 			if name == curr_name:
@@ -762,6 +766,47 @@ class RegistryValue(object):
 				break
 
 		return data
+
+	def data_slack(self):
+		"""Get and return the data slack (as a list of raw bytes)."""
+
+		if self.key_value.get_data_size_real() == 0 or self.key_value.is_data_inline():
+			# No data slack in these cases.
+			return []
+
+		is_big_data = self.registry_file.baseblock.effective_version > 3 and self.key_value.get_data_size_real() > 16344
+		if not is_big_data:
+			slack = self.get_cell(self.key_value.get_data_offset())[self.key_value.get_data_size_real() : ]
+			return [slack]
+
+		slack_list = []
+
+		big_data_buf = self.get_cell(self.key_value.get_data_offset())
+		big_data = RegistryRecords.BigData(big_data_buf)
+
+		slack_list.append(big_data.get_slack())
+
+		segments_list_offset = big_data.get_segments_list_offset()
+		segments_count = big_data.get_segments_count()
+
+		segments_list = RegistryRecords.SegmentsList(self.get_cell(segments_list_offset), segments_count)
+
+		slack_list.append(segments_list.get_slack())
+
+		data_length = self.key_value.get_data_size_real()
+		for segment_offset in segments_list.elements():
+			buf = self.get_cell(segment_offset)
+
+			if data_length > 16344:
+				slack = buf[16344 : ]
+				slack_list.append(slack)
+				data_length -= 16344
+			else:
+				slack = buf[data_length : ]
+				slack_list.append(slack)
+				break
+
+		return slack_list
 
 	def data(self):
 		"""Get, decode and return data (as an integer, a string, a list of strings, or raw bytes).

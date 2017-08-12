@@ -1019,3 +1019,22 @@ def test_hive_slack():
 		hive.walk_everywhere()
 		assert len(hive.effective_slack) > 0
 		assert b'SLCK' in hive.effective_slack
+
+def test_data_slack():
+	with open(hive_bigdata, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		value = hive.root_key().subkey('key_with_bigdata').value()
+		slack_list = value.data_slack()
+
+		assert len(slack_list) == 4
+		for slack in slack_list:
+			assert len(slack) == 4 or len(slack) == 16347
+			for c in slack.decode('windows-1252'):
+				assert c == '\x00'
+
+	with open(hive_strings, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		value = hive.find_key('key').value('3')
+
+		assert value.data_slack() == [ b'w Valu' ]
