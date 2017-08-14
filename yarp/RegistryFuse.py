@@ -10,6 +10,8 @@ import stat
 import errno
 
 CACHE_SUBKEYS_COUNT = 500 # If a key has more subkeys than this number, cache the subkeys.
+XATTR_CLASSNAME = b'user.winreg.class'
+XATTR_DATA_TYPE = b'user.winreg.type'
 
 class YarpFS(llfuse.Operations):
 	"""This is an implementation of a FUSE file system (llfuse) for a registry hive."""
@@ -67,10 +69,10 @@ class YarpFS(llfuse.Operations):
 		"""A virtual name for a value with no name."""
 
 		self.conflict_suffix_value = '_yarp_conflicting_value_name'
-		"""A suffix to append to a value name if a name conflict has arose."""
+		"""A suffix to append to a value name if a name conflict has arisen."""
 
 		self.conflict_suffix_key = '_yarp_conflicting_key_name'
-		"""A suffix to append to a key name if a name conflict has arose."""
+		"""A suffix to append to a key name if a name conflict has arisen."""
 
 		self.slash_replacement = '{yarp_slash_here}'
 		"""A string used to replace a slash in a name."""
@@ -80,6 +82,8 @@ class YarpFS(llfuse.Operations):
 
 	def _yarp_validate_hive(self, registry_hive):
 		def process_key(key):
+			classname = key.classname()
+
 			v_set = set()
 			for value in key.values():
 				v_set.add(value.name())
@@ -407,6 +411,35 @@ class YarpFS(llfuse.Operations):
 
 		return data
 
+	def _yarp_parse_classname(self, cell_relative_offset):
+		if not self._yarp_is_key(cell_relative_offset):
+			raise llfuse.FUSEError(errno.EBADF)
+
+		buf = self._yarp_get_cell(cell_relative_offset)
+		key_node = RegistryRecords.KeyNode(buf)
+
+		classname_length = key_node.get_classname_length()
+		if classname_length == 0:
+			return b''
+
+		buf_classname = self._yarp_get_cell(key_node.get_classname_offset())
+		return buf_classname[ : classname_length]
+
+	def _yarp_parse_data_type(self, cell_relative_offset):
+		if not self._yarp_is_value(cell_relative_offset):
+			raise llfuse.FUSEError(errno.EBADF)
+
+		buf = self._yarp_get_cell(cell_relative_offset)
+		key_value = RegistryRecords.KeyValue(buf)
+
+		data_type = key_value.get_data_type()
+		if data_type in Registry.ValueTypes.keys():
+			data_type_str = Registry.ValueTypes[data_type]
+		else:
+			data_type_str = hex(data_type)
+
+		return data_type_str.encode(self._yarp_encoding)
+
 	def _yarp_construct_attr(self, cell_relative_offset):
 		if not self._yarp_is_virtual_inode(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
@@ -532,6 +565,28 @@ class YarpFS(llfuse.Operations):
 
 	def releasedir(self, fh):
 		self._yarp_release_handle(fh)
+
+	def listxattr(self, inode, ctx):
+		if not self._yarp_is_virtual_inode(inode):
+			raise llfuse.FUSEError(errno.EBADF)
+
+		if self._yarp_is_key(inode):
+			yield XATTR_CLASSNAME
+		else:
+			yield XATTR_DATA_TYPE
+
+	def getxattr(self, inode, name, ctx):
+		if not self._yarp_is_virtual_inode(inode):
+			raise llfuse.FUSEError(errno.EBADF)
+
+		is_key = self._yarp_is_key(inode)
+		if is_key and name == XATTR_CLASSNAME:
+			return self._yarp_parse_classname(inode)
+
+		if (not is_key) and name == XATTR_DATA_TYPE:
+			return self._yarp_parse_data_type(inode)
+
+		raise llfuse.FUSEError(llfuse.ENOATTR)
 
 	def create(self, parent_inode, name, mode, flags, ctx):
 		raise llfuse.FUSEError(errno.EROFS)

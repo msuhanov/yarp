@@ -1,3 +1,10 @@
+Version: 1.0.0-beta17
+
+RegistryFuse: expose class names and data types using the xattr.
+Minor changes.
+
+---
+
 Version: 1.0.0-beta16
 
 Registry: collect the data slack when parsing a value.
