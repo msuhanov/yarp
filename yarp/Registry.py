@@ -3,7 +3,7 @@
 
 from __future__ import unicode_literals, division
 
-from .RegistryFile import RegistryException
+from .RegistryFile import RegistryException, BASE_BLOCK_LENGTH_PRIMARY
 from . import RegistryFile
 from . import RegistryRecords
 from struct import unpack
@@ -629,6 +629,43 @@ class RegistryKey(object):
 						raise WalkException('Duplicate value name')
 
 				yield curr_value
+
+	def remnant_values(self):
+		"""This method yields deleted key values (RegistryValue objects) that are still associated with the key.
+		There is no similar method for subkeys.
+		"""
+
+		track = set()
+
+		values_count = self.values_count()
+		if values_count > 0:
+			list_offset = self.key_node.get_key_values_list_offset()
+			list_buf = self.get_cell(list_offset)
+
+			values_list = RegistryRecords.KeyValuesList(list_buf, values_count)
+
+			slack = values_list.get_slack()
+			self.effective_slack.add(slack)
+
+			for value_offset in values_list.elements():
+				track.add(value_offset)
+
+			for value_offset in values_list.remnant_elements():
+				if value_offset % 8 != 0 or value_offset in track or value_offset + BASE_BLOCK_LENGTH_PRIMARY in self.registry_file.cell_map_referenced:
+					continue
+
+				try:
+					buf = self.registry_file.get_cell_naive(value_offset)
+					curr_value = RegistryValue(self.registry_file, buf, True)
+					curr_value_name = curr_value.name()
+				except (RegistryException, UnicodeDecodeError):
+					track.add(value_offset)
+					continue
+
+				# We do not try to collect the data slack here.
+				yield curr_value
+
+				track.add(value_offset)
 
 	def value(self, name = ''):
 		"""This method returns a key value by its name (a RegistryValue object) or None, if not found.

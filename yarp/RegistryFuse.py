@@ -588,6 +588,22 @@ class YarpFS(llfuse.Operations):
 
 		raise llfuse.FUSEError(llfuse.ENOATTR)
 
+	def statfs(self, ctx):
+		stat = llfuse.StatvfsData()
+
+		stat.f_bsize = 512
+		stat.f_frsize = 512
+
+		# We use dummy values here.
+		stat.f_blocks = 0
+		stat.f_bfree = 0
+		stat.f_bavail = 0
+		stat.f_files = 0
+		stat.f_ffree = 0
+		stat.f_favail = 0
+
+		return stat
+
 	def create(self, parent_inode, name, mode, flags, ctx):
 		raise llfuse.FUSEError(errno.EROFS)
 

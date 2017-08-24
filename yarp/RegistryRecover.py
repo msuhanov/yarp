@@ -42,7 +42,7 @@ def ValidateValue(Value):
 			raise Registry.RegistryException('Data offset (relative) is unaligned')
 
 class Scanner(object):
-	"""This class is used to scan free cells for deleted keys and values."""
+	"""This class is used to scan free cells (and other sources) for deleted keys and values."""
 
 	hive = None
 	"""A RegistryHive object."""

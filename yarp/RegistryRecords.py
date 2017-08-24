@@ -370,6 +370,14 @@ class KeyValuesList(MemoryBlock):
 			yield self.read_uint32(i * 4)
 			i += 1
 
+	def remnant_elements(self):
+		"""This method yields key value offsets (without any validation) from the slack space."""
+
+		i = self.elements_count
+		while i < self.get_size() // 4:
+			yield self.read_uint32(i * 4)
+			i += 1
+
 	def get_slack(self):
 		return self.read_binary(self.elements_count * 4)
 

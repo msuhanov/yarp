@@ -252,7 +252,7 @@ class RegistryFile(object):
 		b = self.read_binary(pos, 8)
 		return unpack('<Q', b)[0]
 
-	def write_uint75(self, pos, i):
+	def write_uint64(self, pos, i):
 		b = pack('<Q', i)
 		self.write_binary(pos, b)
 
@@ -1254,6 +1254,7 @@ class PrimaryFileTruncated(object):
 					self.cell_map_unallocated.add(cell_file_offset)
 
 		self.cell_map_free = self.cell_map_unallocated
+		self.cell_map_referenced = set()
 
 	def get_cell(self, cell_relative_offset):
 		"""Get and return data from a cell. The cell must be in the map of allocated cell or in the map of unallocated cells."""

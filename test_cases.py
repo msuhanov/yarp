@@ -1003,6 +1003,19 @@ def test_slack():
 		r = RegistryRecords.KeyValuesList(buf, 3)
 		assert r.get_slack() == b'SLCK'
 
+		c = 0
+		for element in r.elements():
+			c += 1
+
+		assert c == 3
+
+		c = 0
+		for element in r.remnant_elements():
+			c += 1
+			assert element == 1262701651 # b'SLCK'
+
+		assert c == 1
+
 		r = RegistryRecords.SegmentsList(buf, 3)
 		assert r.get_slack() == b'SLCK'
 
@@ -1038,3 +1051,20 @@ def test_data_slack():
 		value = hive.find_key('key').value('3')
 
 		assert value.data_slack() == [ b'w Valu' ]
+
+def test_deleted_value_assoc():
+	with open(hive_deleted_data, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+
+		hive.walk_everywhere()
+
+		key = hive.find_key('123')
+
+		c = 0
+		for value in key.remnant_values():
+			assert value.name() == 'v2'
+			assert value.type_raw() == RegistryRecords.REG_SZ
+			assert value.data() == '456\x00'
+			c += 1
+
+		assert c == 1

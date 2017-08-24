@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-print'
-PROGRAM_VERSION = '1.0.0-beta17'
+PROGRAM_VERSION = '1.0.0-beta18'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'do_recovery', 'do_deleted' ])
 
@@ -94,6 +94,19 @@ def print_key(key):
 	for value in key.values():
 		print_value(value)
 
+	if args.do_deleted:
+		print_note = True
+		try:
+			for value in key.remnant_values():
+				if print_note:
+					print('Associated deleted values below (may contain reallocated data):')
+					print()
+					print_note = False
+
+				print_deleted_value(value)
+		except (Registry.RegistryException, UnicodeDecodeError):
+			pass
+
 	print('---')
 	print()
 
@@ -171,6 +184,12 @@ def print_deleted_key(key):
 
 	try:
 		for value in key.values():
+			print_deleted_value(value)
+	except (Registry.RegistryException, UnicodeDecodeError):
+		pass
+
+	try:
+		for value in key.remnant_values():
 			print_deleted_value(value)
 	except (Registry.RegistryException, UnicodeDecodeError):
 		pass
