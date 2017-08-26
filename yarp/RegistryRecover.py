@@ -38,7 +38,8 @@ def ValidateValue(Value):
 		if Value.key_value.get_data_size_real() > 4:
 			raise Registry.RegistryException('Value data is too large to be stored inline')
 	else:
-		if Value.key_value.get_data_size_real() > 0 and Value.key_value.get_data_offset() % 8 != 0:
+		data_offset = Value.key_value.get_data_offset()
+		if Value.key_value.get_data_size_real() > 0 and (data_offset < 8 or data_offset % 8 != 0):
 			raise Registry.RegistryException('Data offset (relative) is unaligned')
 
 class Scanner(object):

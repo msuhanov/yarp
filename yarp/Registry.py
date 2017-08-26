@@ -651,7 +651,10 @@ class RegistryKey(object):
 				track.add(value_offset)
 
 			for value_offset in values_list.remnant_elements():
-				if value_offset % 8 != 0 or value_offset in track or value_offset + BASE_BLOCK_LENGTH_PRIMARY in self.registry_file.cell_map_referenced:
+				if value_offset < 8 or value_offset % 8 != 0:
+					break
+
+				if value_offset in track or value_offset + BASE_BLOCK_LENGTH_PRIMARY in self.registry_file.cell_map_referenced:
 					continue
 
 				try:

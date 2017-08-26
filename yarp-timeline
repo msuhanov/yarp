@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-timeline'
-PROGRAM_VERSION = '1.0.0-beta18'
+PROGRAM_VERSION = '1.0.0-beta19'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'faster' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
