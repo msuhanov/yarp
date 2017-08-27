@@ -1,5 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
+#
+# This module implements an interface to carve registry hives from a disk image.
 
 from __future__ import unicode_literals
 

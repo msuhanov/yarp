@@ -1,5 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
+#
+# This module implements a FUSE interface.
 
 from __future__ import unicode_literals
 

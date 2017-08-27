@@ -1,5 +1,8 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
+#
+# This module implements a high-level interface.
+# Most users should use this module to work with a registry hive.
 
 from __future__ import unicode_literals, division
 

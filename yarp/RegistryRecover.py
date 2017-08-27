@@ -1,5 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
+#
+# This module implements an interface to recover deleted keys and values.
 
 from __future__ import unicode_literals
 

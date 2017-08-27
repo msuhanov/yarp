@@ -1,5 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
+#
+# This module contains various helper functions.
 
 from __future__ import unicode_literals
 

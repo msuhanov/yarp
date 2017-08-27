@@ -773,10 +773,14 @@ def test_deleted():
 		hive.walk_everywhere()
 
 		scanner = RegistryRecover.Scanner(hive)
+		c = 0
 		for i in scanner.scan():
 			assert type(i) is Registry.RegistryKey
 			assert i.path() in [ '1\\2\\3', '1\\2\\3\\4', '1\\2\\3\\4\\5', '1\\2\\3\\4\\New Key #1' ]
 			assert i.path_partial() == i.path()
+			c += 1
+
+		assert c == 4
 
 	with open(hive_healed, 'rb') as f:
 		hive = Registry.RegistryHive(f)
@@ -892,10 +896,14 @@ def test_deleted_tree_no_root_flag():
 		hive.walk_everywhere()
 
 		scanner = RegistryRecover.Scanner(hive)
+		c = 0
 		for i in scanner.scan():
 			assert type(i) is Registry.RegistryKey
 			assert i.path() in [ '1\\2\\3', '1\\2\\3\\4', '1\\2\\3\\4\\5', '1\\2\\3\\4\\New Key #1' ]
 			assert i.path_partial() == i.path()
+			c += 1
+
+		assert c == 4
 
 def test_deleted_tree_partial_path():
 	with open(hive_deleted_tree_partial_path, 'rb') as f:
@@ -904,9 +912,13 @@ def test_deleted_tree_partial_path():
 		hive.walk_everywhere()
 
 		scanner = RegistryRecover.Scanner(hive)
+		c = 0
 		for i in scanner.scan():
 			assert type(i) is Registry.RegistryKey
 			assert i.path_partial() in [ '3', '3\\4', '3\\4\\5', '3\\4\\New Key #1' ]
+			c += 1
+
+		assert c == 4
 
 def test_flags_converter():
 	cases = [
