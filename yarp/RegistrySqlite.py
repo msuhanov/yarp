@@ -48,7 +48,7 @@ class YarpDB(object):
 	"""Schema for the 'values' table."""
 
 	def __init__(self, primary_path, sqlite_path, no_recovery = False):
-		"""Create an sqlite3 database using the 'sqlite_path', the database is filled with data from a registry hive specified by 'primary_path'.
+		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry hive specified by 'primary_path'.
 		When 'no_recovery' is True, transaction log files are not used to recover a primary file.
 		"""
 
