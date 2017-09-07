@@ -4,10 +4,11 @@
 # (c) Maxim Suhanov
 
 import pytest
+import sys
 from io import BytesIO
 from os import path, remove
 from hashlib import md5
-from yarp import Registry, RegistryFile, RegistryRecords, RegistryRecover, RegistryCarve, RegistryHelpers
+from yarp import Registry, RegistryFile, RegistryRecords, RegistryRecover, RegistryCarve, RegistrySqlite, RegistryHelpers
 
 HIVES_DIR = 'hives_for_tests'
 RECORDS_DIR = 'records_for_tests'
@@ -72,6 +73,8 @@ hive_slack = path.join(HIVES_DIR, 'SlackHive')
 
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
+
+hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 
 log_discovery = [
 	path.join(HIVES_DIR, 'Discovery', '1', 'aa'),
@@ -1080,3 +1083,256 @@ def test_deleted_value_assoc():
 			c += 1
 
 		assert c == 1
+
+def test_sqlite():
+	if sys.version_info.major != 3:
+		pytest.skip()
+
+	with RegistrySqlite.YarpDB(hive_sqlite, ':memory:') as h:
+		root = h.root_key()
+
+		assert not root.is_deleted
+		assert root.name == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+		assert root.classname is None
+		assert root.last_written_timestamp == 131491245452005837
+		assert root.access_bits == 0
+
+		c = 0
+		for subkey in h.subkeys(root.rowid):
+			c += 1
+
+			assert (subkey.name == 'A1' and subkey.last_written_timestamp == 131491247867995634) or (subkey.name == 'A2' and subkey.last_written_timestamp == 131491246443034697)
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+			assert not subkey.is_deleted
+
+			if subkey.name == 'A1':
+				a1 = subkey.rowid
+			else:
+				a2 = subkey.rowid
+
+		assert c == 2
+
+		c = 0
+		for subkey in h.subkeys(a2):
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for value in h.values(a2):
+			c += 1
+
+			assert value.name == 'A2'
+			assert value.type == 1
+			assert value.data == b'A\x00A\x00A\x002\x00\x00\x00'
+			assert not value.is_deleted
+
+		assert c == 1
+
+		c = 0
+		for value in h.values(a1):
+			c += 1
+
+			assert value.name == 'AAA1'
+			assert value.type == 1
+			assert value.data == b'\x00\x00'
+			assert not value.is_deleted
+
+		assert c == 1
+
+		c = 0
+		for subkey in h.subkeys(a1):
+			c += 1
+
+			assert (subkey.name == 'B1' and subkey.is_deleted and subkey.last_written_timestamp == 131491247867995634) or (subkey.name == 'B2' and (not subkey.is_deleted) and subkey.last_written_timestamp == 131491247948396025)
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+
+			if subkey.name == 'B1':
+				b1 = subkey.rowid
+			else:
+				b2 = subkey.rowid
+
+		assert c == 2
+
+		c = 0
+		for value in h.values(b1):
+			c += 1
+
+			assert value.name == 'B1'
+			assert value.type == 1
+			assert value.data == b'B\x00B\x00B\x001\x00\x00\x00'
+			assert value.is_deleted
+
+		assert c == 1
+
+		c = 0
+		for value in h.values(b2):
+			c += 1
+
+			assert (value.name == 'B2' and value.data == b'B\x00B\x00B\x002\x00\x00\x00' and not value.is_deleted) or (value.name == 'B2_' and value.data == b'B\x00B\x00B\x002\x00_\x00\x00\x00' and value.is_deleted)
+			assert value.type == 1
+
+		assert c == 2
+
+		c = 0
+		for subkey in h.subkeys(b2):
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for subkey in h.subkeys(b1):
+			c += 1
+
+			assert subkey.name == 'C'
+			assert subkey.last_written_timestamp == 131491247867995634
+			assert subkey.is_deleted
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+
+			c_rowid = subkey.rowid
+
+		assert c == 1
+
+		c = 0
+		for value in h.values(c_rowid):
+			c += 1
+
+			assert (value.name == 'C1' and value.data == b'C\x00C\x00C\x001\x00\x00\x00') or (value.name == 'C2' and value.data == b'C\x00C\x00C\x002\x00\x00\x00')
+			assert value.type == 1
+			assert value.is_deleted
+
+		assert c == 2
+
+		c = 0
+		for subkey in h.subkeys(c_rowid):
+			c += 1
+
+			assert subkey.name == 'D'
+			assert subkey.last_written_timestamp == 131491245736608915
+			assert subkey.is_deleted
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+
+			d = subkey.rowid
+
+		assert c == 1
+
+		c = 0
+		for subkey in h.subkeys(d):
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for value in h.values(d):
+			c += 1
+
+			assert value.name == 'D'
+			assert value.type == 1
+			assert value.data == b'D\x00D\x00D\x00\x00\x00'
+			assert value.is_deleted
+
+		assert c == 1
+
+		i = h.info()
+		assert i.last_written_timestamp == 131491247980046415
+		assert i.last_reorganized_timestamp is None
+
+		c = 0
+		for subkey in h.subkeys_unassociated():
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for value in h.values_deleted():
+			c += 1
+
+			assert value.is_deleted
+			assert value.type == 1
+			assert value.name in [ 'C2', 'D', 'Новый параметр #1', 'C1', 'B1', 'B2_' ]
+
+		assert c == 6
+
+	with RegistrySqlite.YarpDB(hive_deleted_tree_partial_path, ':memory:') as h:
+		root = h.root_key()
+
+		assert not root.is_deleted
+		assert root.name == '{d253c44d-aea4-4117-bb6c-34bb4803b13e}'
+		assert root.classname is None
+		assert root.last_written_timestamp == 131345184827581997
+		assert root.access_bits == 0
+
+		c = 0
+		for subkey in h.subkeys(root.rowid):
+			c += 1
+
+			assert not subkey.is_deleted
+			assert subkey.name == '1'
+			assert subkey.classname is None
+			assert subkey.last_written_timestamp == 131345184847726253
+			assert subkey.access_bits == 0
+
+			cc = 0
+			for subkey2 in h.subkeys(subkey.rowid):
+				cc += 1
+
+				assert not subkey2.is_deleted
+				assert subkey2.name == '2'
+				assert subkey2.classname is None
+				assert subkey2.last_written_timestamp == 131345184953072285
+				assert subkey2.access_bits == 0
+
+			assert cc == 1
+
+		assert c == 1
+
+		c = 0
+		for value in h.values_deleted():
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for subkey in h.subkeys_unassociated():
+			c += 1
+
+			assert subkey.is_deleted
+			assert subkey.name == '3'
+			assert subkey.classname is None
+			assert subkey.last_written_timestamp == 131345184953072285
+			assert subkey.access_bits == 0
+
+			rowid = subkey.rowid
+
+		assert c == 1
+
+		c = 0
+		for subkey in h.subkeys(rowid):
+			c += 1
+
+			print(c, subkey)
+
+			assert subkey.is_deleted
+			assert subkey.name == '4'
+			assert subkey.classname is None
+			assert subkey.last_written_timestamp == 131345184953072285
+			assert subkey.access_bits == 0
+
+			rowid = subkey.rowid
+
+		assert c == 1
+
+		c = 0
+		for subkey in h.subkeys(rowid):
+			c += 1
+
+			assert (subkey.name == '5' and subkey.last_written_timestamp == 131345184913496045) or (subkey.name == 'New Key #1' and subkey.last_written_timestamp == 131345184906594029)
+			assert subkey.is_deleted
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+
+		assert c == 2

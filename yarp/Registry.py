@@ -603,8 +603,8 @@ class RegistryKey(object):
 
 		values_names = set()
 
-		values_count = self.key_node.get_key_values_count()
-		if values_count > 0 and self.key_node.get_flags() & RegistryRecords.KEY_PREDEF_HANDLE == 0:
+		values_count = self.values_count()
+		if values_count > 0:
 			list_offset = self.key_node.get_key_values_list_offset()
 			list_buf = self.get_cell(list_offset)
 
@@ -676,6 +676,7 @@ class RegistryKey(object):
 	def value(self, name = ''):
 		"""This method returns a key value by its name (a RegistryValue object) or None, if not found.
 		When 'name' is empty, a default value is returned (if any).
+		Remnant values are ignored by this method.
 		"""
 
 		name = name.lower()
