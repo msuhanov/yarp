@@ -192,7 +192,7 @@ class YarpDB(object):
 
 		return hasher.hexdigest()
 
-	def _db_value_to_id(self, value, is_deleted):
+	def _db_value_to_id(self, value, is_deleted = 0):
 		"""Calculate and return the ID for a value."""
 
 		curr_id = self._value_id
@@ -361,7 +361,7 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		for result in self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive` WHERE `id` = ?', (0,)):
+		for result in self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive`'):
 			if result[1] is None:
 				ts_lr = None
 			else:
