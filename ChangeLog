@@ -1,3 +1,9 @@
+Version: 1.0.0-beta23
+
+RegistrySqlite: resolve the TypeError bug.
+
+---
+
 Version: 1.0.0-beta22
 
 Minor update.

@@ -351,6 +351,8 @@ class YarpDB(object):
 
 		self.db_cursor.execute('SELECT `root_key_id` FROM `hive`')
 		p = self.db_cursor.fetchone()[0]
+		if p is None:
+			return
 
 		self.db_cursor.execute('SELECT `rowid` FROM `keys` WHERE `id` = ?', (p,))
 		p = self.db_cursor.fetchone()[0]
