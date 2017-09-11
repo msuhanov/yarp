@@ -1,3 +1,10 @@
+Version: 1.0.0-beta25
+
+Registry, RegistrySqlite: handle reallocated deleted values.
+RegistrySqlite: resolve the StopIteration leak.
+
+---
+
 Version: 1.0.0-beta24
 
 RegistrySqlite: resolve the TypeError bug #2.

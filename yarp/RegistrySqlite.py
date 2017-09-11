@@ -199,6 +199,18 @@ class YarpDB(object):
 		self._value_id += 1
 		return curr_id
 
+	def _db_is_reallocated_value(self, value):
+		"""Check if a deleted value has been reallocated."""
+
+		if value.cell_relative_offset is None:
+			return False
+
+		value_offset = value.cell_relative_offset + RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+		if not self._is_hive_truncated:
+			return value_offset in self._hive.registry_file.cell_map_referenced
+		else:
+			return value_offset in self._hive.registry_file.cell_map_allocated
+
 	def _db_add_key(self, key, is_deleted = 0):
 		"""Add a key and its values to the database."""
 
@@ -243,12 +255,18 @@ class YarpDB(object):
 
 		try:
 			for value in key.values():
+				if is_deleted and self._db_is_reallocated_value(value):
+					continue
+
 				self._db_add_value(value, key_id, is_deleted)
 		except (Registry.RegistryException, UnicodeDecodeError):
 			pass
 
 		try:
 			for value in key.remnant_values():
+				if self._db_is_reallocated_value(value):
+					continue
+
 				self._db_add_value(value, key_id, 1)
 		except (Registry.RegistryException, UnicodeDecodeError):
 			pass
@@ -301,7 +319,10 @@ class YarpDB(object):
 	def key(self, key_rowid):
 		"""Get and return a key by its row ID (or None, if not found)."""
 
-		for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `rowid` = ?', (key_rowid,)):
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			return Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 
 	def subkeys(self, key_rowid):
@@ -310,7 +331,10 @@ class YarpDB(object):
 		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
 		p = self.db_cursor.fetchone()[0]
 
-		for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ?', (p,)):
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ?', (p,))
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 
 	def subkeys_unassociated(self):
@@ -319,16 +343,26 @@ class YarpDB(object):
 		root_key = self.root_key()
 		if root_key is not None:
 			p = root_key.rowid
-			for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL AND `rowid` != ?', (p,)):
+
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL AND `rowid` != ?', (p,))
+			results = self.db_cursor.fetchall()
+
+			for result in results:
 				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 		else:
-			for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL'):
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL')
+			results = self.db_cursor.fetchall()
+
+			for result in results:
 				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 
 	def value(self, value_rowid):
 		"""Get and return a value by its row ID (or None, if not found)."""
 
-		for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `rowid` = ?', (value_rowid,)):
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `rowid` = ?', (value_rowid,))
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			return Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
 	def values(self, key_rowid):
@@ -337,19 +371,25 @@ class YarpDB(object):
 		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
 		p = self.db_cursor.fetchone()[0]
 
-		for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ?', (p,)):
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ?', (p,))
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			yield Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
 	def values_deleted(self):
 		"""Get and yield all deleted values."""
 
-		for result in self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` IS NULL'):
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` IS NULL')
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			yield Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
 	def root_key(self):
 		"""Get and return a root key (or None, if not found)."""
 
-		self.db_cursor.execute('SELECT `root_key_id` FROM `hive`')
+		self.db_cursor.execute('SELECT `root_key_id` FROM `hive` LIMIT 1')
 		p = self.db_cursor.fetchone()[0]
 		if p is None:
 			return
@@ -363,7 +403,10 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		for result in self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive`'):
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive`')
+		results = self.db_cursor.fetchall()
+
+		for result in results:
 			if result[1] is None:
 				ts_lr = None
 			else:

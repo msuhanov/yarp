@@ -616,6 +616,7 @@ class RegistryKey(object):
 			for value_offset in values_list.elements():
 				buf = self.get_cell(value_offset)
 				curr_value = RegistryValue(self.registry_file, buf, self.naive)
+				curr_value.cell_relative_offset = value_offset
 
 				slack_list = curr_value.data_slack()
 				for curr_slack in slack_list:
@@ -667,6 +668,8 @@ class RegistryKey(object):
 				except (RegistryException, UnicodeDecodeError):
 					track.add(value_offset)
 					continue
+				else:
+					curr_value.cell_relative_offset = value_offset
 
 				# We do not try to collect the data slack here.
 				yield curr_value
@@ -742,6 +745,7 @@ class RegistryValue(object):
 			self.get_cell = self.registry_file.get_cell_naive
 
 		self.key_value = RegistryRecords.KeyValue(buf)
+		self.cell_relative_offset = None # This is set externally.
 
 	def name(self):
 		"""Get, decode and return a value name string."""

@@ -75,6 +75,7 @@ hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
+hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 
 log_discovery = [
 	path.join(HIVES_DIR, 'Discovery', '1', 'aa'),
@@ -1314,8 +1315,6 @@ def test_sqlite():
 		for subkey in h.subkeys(rowid):
 			c += 1
 
-			print(c, subkey)
-
 			assert subkey.is_deleted
 			assert subkey.name == '4'
 			assert subkey.classname is None
@@ -1336,3 +1335,44 @@ def test_sqlite():
 			assert subkey.access_bits == 0
 
 		assert c == 2
+
+	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', False) as h:
+		root = h.root_key()
+
+		assert not root.is_deleted
+
+		c = 0
+		for subkey in h.subkeys(root.rowid):
+			c += 1
+
+			if subkey.name == '1':
+				assert not subkey.is_deleted
+
+				cc = 0
+				for value in h.values(subkey.rowid):
+					cc += 1
+
+					assert value.name == ''
+					assert value.data == b'1\x001\x001\x001\x00\x00\x00'
+					assert not value.is_deleted
+
+				assert cc == 1
+			elif subkey.name == '2':
+				assert subkey.is_deleted
+
+				for value in h.values(subkey.rowid):
+					assert False
+			else:
+				assert False
+
+		assert c == 2
+
+		c = 0
+		for value in h.values_deleted():
+			c += 1
+
+			assert value.name == ''
+			assert value.type == 1
+			assert value.data == b'2\x002\x002\x002\x00\x00\x00'
+
+		assert c == 1
