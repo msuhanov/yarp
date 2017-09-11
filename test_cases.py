@@ -70,6 +70,7 @@ hive_effective_size = path.join(HIVES_DIR, 'EffectiveSizeHive')
 hive_deleted_tree_no_root_flag = path.join(HIVES_DIR, 'DeletedTreeNoRootFlagHive')
 hive_deleted_tree_partial_path = path.join(HIVES_DIR, 'DeletedTreePartialPathHive')
 hive_slack = path.join(HIVES_DIR, 'SlackHive')
+hive_truncated_dirty = path.join(HIVES_DIR, 'TruncatedDirtyHive')
 
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
@@ -140,7 +141,7 @@ def test_bigdata():
 		for c in data.decode('windows-1252'):
 			assert c == '2'
 
-		assert key.value('dont_exist') is None
+		assert key.value('doesnt_exist') is None
 
 def test_many_subkeys():
 	with open(hive_many_subkeys, 'rb') as f:
@@ -170,10 +171,10 @@ def test_many_subkeys():
 		key = hive.find_key('key_with_many_subkeys\\3000')
 		assert key is not None
 
-		key = hive.find_key('key_with_many_subkeys\\3000\\dont_exist')
+		key = hive.find_key('key_with_many_subkeys\\3000\\doesnt_exist')
 		assert key is None
 
-		key = hive.find_key('key_with_many_subkeys\\dont_exist\\dont_exist')
+		key = hive.find_key('key_with_many_subkeys\\doesnt_exist\\doesnt_exist')
 		assert key is None
 
 def test_garbage():
@@ -216,7 +217,7 @@ def test_dirty_new1(reverse):
 		assert key_21 is not None
 		assert key_22 is not None
 
-		key_bad = hive.find_key('Key2\\Key2_2\\dont_exist')
+		key_bad = hive.find_key('Key2\\Key2_2\\doesnt_exist')
 		assert key_bad is None
 
 		value = key_1.value()
@@ -271,7 +272,7 @@ def test_dirty_new1(reverse):
 		assert key_32 is not None
 		assert key_33 is not None
 
-		key_bad = hive.find_key('Key3\\Key3_2\\dont_exist')
+		key_bad = hive.find_key('Key3\\Key3_2\\doesnt_exist')
 		assert key_bad is None
 
 		value = key_3.value()
@@ -1090,6 +1091,17 @@ def test_sqlite():
 		pytest.skip()
 
 	with RegistrySqlite.YarpDB(hive_sqlite, ':memory:') as h:
+		doesnt_exist = 9999999999
+
+		assert h.key(doesnt_exist) is None
+		assert h.value(doesnt_exist) is None
+
+		for i in h.subkeys(doesnt_exist):
+			assert False
+
+		for i in h.values(doesnt_exist):
+			assert False
+
 		root = h.root_key()
 
 		assert not root.is_deleted
@@ -1259,6 +1271,17 @@ def test_sqlite():
 		assert c == 6
 
 	with RegistrySqlite.YarpDB(hive_deleted_tree_partial_path, ':memory:') as h:
+		doesnt_exist = 9999999999
+
+		assert h.key(doesnt_exist) is None
+		assert h.value(doesnt_exist) is None
+
+		for i in h.subkeys(doesnt_exist):
+			assert False
+
+		for i in h.values(doesnt_exist):
+			assert False
+
 		root = h.root_key()
 
 		assert not root.is_deleted
@@ -1336,7 +1359,18 @@ def test_sqlite():
 
 		assert c == 2
 
-	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', False) as h:
+	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', True) as h:
+		doesnt_exist = 9999999999
+
+		assert h.key(doesnt_exist) is None
+		assert h.value(doesnt_exist) is None
+
+		for i in h.subkeys(doesnt_exist):
+			assert False
+
+		for i in h.values(doesnt_exist):
+			assert False
+
 		root = h.root_key()
 
 		assert not root.is_deleted
@@ -1376,3 +1410,52 @@ def test_sqlite():
 			assert value.data == b'2\x002\x002\x002\x00\x00\x00'
 
 		assert c == 1
+
+	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:', True) as h:
+		doesnt_exist = 9999999999
+
+		assert h.key(doesnt_exist) is None
+		assert h.value(doesnt_exist) is None
+
+		for i in h.subkeys(doesnt_exist):
+			assert False
+
+		for i in h.values(doesnt_exist):
+			assert False
+
+	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:') as h:
+		root_rowid = h.root_key().rowid
+		for i in h.values(root_rowid):
+			assert False
+
+
+		c = 0
+		for i in h.subkeys(root_rowid):
+			c += 1
+
+			assert i.name == 'key_with_many_subkeys'
+			rowid = i.rowid
+
+		for i in h.values(rowid):
+			assert False
+
+		for i in h.values(rowid):
+			for j in h.values(i.rowid):
+				assert False
+
+			for j in h.subkeys(i.rowid):
+				assert False
+
+
+			assert int(i.name) > 0
+
+			doesnt_exist = 9999999999
+
+			assert h.key(doesnt_exist) is None
+			assert h.value(doesnt_exist) is None
+
+			for i in h.subkeys(doesnt_exist):
+				assert False
+
+			for i in h.values(doesnt_exist):
+				assert False

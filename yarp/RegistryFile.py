@@ -1259,7 +1259,7 @@ class PrimaryFileTruncated(object):
 		self.cell_map_referenced = set()
 
 	def get_cell(self, cell_relative_offset):
-		"""Get and return data from a cell. The cell must be in the map of allocated cell or in the map of unallocated cells."""
+		"""Get and return data from a cell. The cell must be in the map of allocated cells or in the map of unallocated cells."""
 
 		if cell_relative_offset == CELL_OFFSET_NIL:
 			raise CellOffsetException('Got CELL_OFFSET_NIL')

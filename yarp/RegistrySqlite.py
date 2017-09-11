@@ -24,7 +24,7 @@ class YarpDB(object):
 					'`last_reorganized_timestamp` TEXT,'
 					'`root_key_id` TEXT'
 					')')
-	"""Schema for the 'hive' table. Timestamps (here and in other places) are integers stored as text (FILETIME)."""
+	"""Schema for the 'hive' table. Timestamps (here and in other places) are integers stored as text (FILETIME). Only one row is allowed in this table."""
 
 	schema_keys = ('CREATE TABLE `keys` ('
 					'`id` TEXT PRIMARY KEY,'
@@ -97,7 +97,16 @@ class YarpDB(object):
 
 			self._db_init()
 
-			self._hive.walk_everywhere()
+			try:
+				self._hive.walk_everywhere()
+			except RegistryFile.CellOffsetException:
+				# This is an edge case: a truncated dirty hive.
+				self._is_hive_truncated = True
+				self._hive = Registry.RegistryHiveTruncated(self._primary)
+
+				self._db_process_deleted_data()
+				self._db_process_partial_data()
+				return
 
 			self._db_process_deleted_data()
 			self._db_process_data()
@@ -144,11 +153,7 @@ class YarpDB(object):
 
 		self.db_cursor.execute('DROP TABLE IF EXISTS `hive`')
 		self.db_cursor.execute('DROP TABLE IF EXISTS `keys`')
-		self.db_cursor.execute('DROP INDEX IF EXISTS `keys_idx_name`')
-		self.db_cursor.execute('DROP INDEX IF EXISTS `keys_idx_parent_key_id`')
 		self.db_cursor.execute('DROP TABLE IF EXISTS `values`')
-		self.db_cursor.execute('DROP INDEX IF EXISTS `values_idx_name`')
-		self.db_cursor.execute('DROP INDEX IF EXISTS `values_idx_parent_key_id`')
 
 	def _db_init(self):
 		"""Create the tables and indices. Set up basic data about the hive."""
@@ -245,10 +250,10 @@ class YarpDB(object):
 				parent_key_id = None
 				if not self._root_found:
 					self._root_found = True
-					self.db_cursor.execute('UPDATE `hive` SET `root_key_id` = ?', (key_id,))
+					self.db_cursor.execute('UPDATE `hive` SET `root_key_id` = ? WHERE `id` = ?', (key_id, 0))
 				else:
 					# Two or more keys are marked as root, do not trust them.
-					self.db_cursor.execute('UPDATE `hive` SET `root_key_id` = ?', (None,))
+					self.db_cursor.execute('UPDATE `hive` SET `root_key_id` = ? WHERE `id` = ?', (None, 0))
 
 		self.db_cursor.execute('INSERT OR IGNORE INTO `keys` (`id`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id`) VALUES (?, ?, ?, ?, ?, ?, ?)',
 			(key_id, is_deleted, name, classname, last_written_timestamp, access_bits, parent_key_id))
@@ -329,13 +334,14 @@ class YarpDB(object):
 		"""Get and yield subkeys of a key with a specific row ID."""
 
 		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
-		p = self.db_cursor.fetchone()[0]
+		p = self.db_cursor.fetchone()
+		if p is not None:
+			p = p[0]
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ?', (p,))
+			results = self.db_cursor.fetchall()
 
-		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ?', (p,))
-		results = self.db_cursor.fetchall()
-
-		for result in results:
-			yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
+			for result in results:
+				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 
 	def subkeys_unassociated(self):
 		"""Get and yield unassociated subkeys."""
@@ -369,13 +375,14 @@ class YarpDB(object):
 		"""Get and yield values of a key with a specific row ID."""
 
 		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
-		p = self.db_cursor.fetchone()[0]
+		p = self.db_cursor.fetchone()
+		if p is not None:
+			p = p[0]
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ?', (p,))
+			results = self.db_cursor.fetchall()
 
-		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ?', (p,))
-		results = self.db_cursor.fetchall()
-
-		for result in results:
-			yield Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
+			for result in results:
+				yield Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
 	def values_deleted(self):
 		"""Get and yield all deleted values."""
@@ -389,21 +396,24 @@ class YarpDB(object):
 	def root_key(self):
 		"""Get and return a root key (or None, if not found)."""
 
-		self.db_cursor.execute('SELECT `root_key_id` FROM `hive` LIMIT 1')
+		self.db_cursor.execute('SELECT `root_key_id` FROM `hive` WHERE `id` = ?', (0,))
 		p = self.db_cursor.fetchone()[0]
 		if p is None:
 			return
 
 		self.db_cursor.execute('SELECT `rowid` FROM `keys` WHERE `id` = ?', (p,))
-		p = self.db_cursor.fetchone()[0]
+		p = self.db_cursor.fetchone()
+		if p is None:
+			return
 
+		p = p[0]
 		if p is not None:
 			return self.key(p)
 
 	def info(self):
 		"""Get and return information about a hive."""
 
-		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive`')
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive` WHERE `id` = ?', (0,))
 		results = self.db_cursor.fetchall()
 
 		for result in results:
