@@ -88,18 +88,25 @@ class YarpDB(object):
 		self._db_clear()
 
 		if not self._is_hive_truncated:
+			recovered = False
+
 			# Recover the hive, if required.
 			if not no_recovery:
 				try:
-					self._hive.recover_auto(self._log, self._log1, self._log2)
+					recovery_result = self._hive.recover_auto(self._log, self._log1, self._log2)
 				except Registry.AutoRecoveryException:
 					pass
+				else:
+					recovered = recovery_result.recovered
 
 			self._db_init()
 
 			try:
 				self._hive.walk_everywhere()
 			except RegistryFile.CellOffsetException:
+				if recovered:
+					raise
+
 				# This is an edge case: a truncated dirty hive.
 				self._is_hive_truncated = True
 				self._hive = Registry.RegistryHiveTruncated(self._primary)
@@ -216,6 +223,18 @@ class YarpDB(object):
 		else:
 			return value_offset in self._hive.registry_file.cell_map_allocated
 
+	def _db_is_reallocated_value_data(self, value):
+		"""Check if deleted value data has been reallocated."""
+
+		if value.key_value.is_data_inline():
+			return False
+
+		data_offset = value.key_value.get_data_offset() + RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+		if not self._is_hive_truncated:
+			return data_offset in self._hive.registry_file.cell_map_referenced
+		else:
+			return data_offset in self._hive.registry_file.cell_map_allocated
+
 	def _db_add_key(self, key, is_deleted = 0):
 		"""Add a key and its values to the database."""
 
@@ -286,6 +305,9 @@ class YarpDB(object):
 		try:
 			data_raw = value.data_raw()
 		except Registry.RegistryException:
+			data_raw = None
+
+		if is_deleted and self._db_is_reallocated_value_data(value):
 			data_raw = None
 
 		self.db_cursor.execute('INSERT OR IGNORE INTO `values` (`id`, `is_deleted`, `name`, `type`, `data`, `parent_key_id`) VALUES (?, ?, ?, ?, ?, ?)',

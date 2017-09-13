@@ -1,3 +1,10 @@
+Version: 1.0.0-beta27
+
+RegistrySqlite: handle reallocated deleted value data.
+Minor changes.
+
+---
+
 Version: 1.0.0-beta26
 
 RegistrySqlite: several improvements.
