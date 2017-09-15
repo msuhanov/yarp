@@ -1,3 +1,9 @@
+Version: 1.0.0-beta28
+
+RegistrySqlite: add the hive recovery status to a database.
+
+---
+
 Version: 1.0.0-beta27
 
 RegistrySqlite: handle reallocated deleted value data.

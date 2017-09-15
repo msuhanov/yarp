@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-print'
-PROGRAM_VERSION = '1.0.0-beta27'
+PROGRAM_VERSION = '1.0.0-beta28'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'do_recovery', 'do_deleted' ])
 

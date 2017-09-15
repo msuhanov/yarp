@@ -10,7 +10,7 @@ from collections import namedtuple
 
 Key = namedtuple('Key', [ 'rowid', 'is_deleted', 'name', 'classname', 'last_written_timestamp', 'access_bits', 'parent_key_id' ])
 Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'parent_key_id' ])
-HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp' ])
+HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered' ])
 
 class YarpDB(object):
 	"""This is an implementation of a registry hive to an sqlite3 database converter."""
@@ -22,7 +22,8 @@ class YarpDB(object):
 					'`id` INTEGER PRIMARY KEY,'
 					'`last_written_timestamp` TEXT,'
 					'`last_reorganized_timestamp` TEXT,'
-					'`root_key_id` TEXT'
+					'`root_key_id` TEXT,'
+					'`recovered` NUMERIC'
 					')')
 	"""Schema for the 'hive' table. Timestamps (here and in other places) are integers stored as text (FILETIME). Only one row is allowed in this table."""
 
@@ -88,7 +89,7 @@ class YarpDB(object):
 		self._db_clear()
 
 		if not self._is_hive_truncated:
-			recovered = False
+			self._recovered = False
 
 			# Recover the hive, if required.
 			if not no_recovery:
@@ -97,14 +98,14 @@ class YarpDB(object):
 				except Registry.AutoRecoveryException:
 					pass
 				else:
-					recovered = recovery_result.recovered
+					self._recovered = recovery_result.recovered
 
 			self._db_init()
 
 			try:
 				self._hive.walk_everywhere()
 			except RegistryFile.CellOffsetException:
-				if recovered:
+				if self._recovered:
 					raise
 
 				# This is an edge case: a truncated dirty hive.
@@ -184,8 +185,13 @@ class YarpDB(object):
 		else:
 			last_reorganized_timestamp = str(self._hive.registry_file.baseblock.effective_last_reorganized_timestamp)
 
-		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`) VALUES (?, ?, ?, ?)',
-			(0, last_written_timestamp, last_reorganized_timestamp, None))
+		if self._recovered:
+			recovered = 1
+		else:
+			recovered = 0
+
+		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`) VALUES (?, ?, ?, ?, ?)',
+			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered))
 
 		# Set up the value ID counter, etc.
 		self._value_id = 0
@@ -435,7 +441,7 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp` FROM `hive` WHERE `id` = ?', (0,))
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered` FROM `hive` WHERE `id` = ?', (0,))
 		results = self.db_cursor.fetchall()
 
 		for result in results:
@@ -444,4 +450,4 @@ class YarpDB(object):
 			else:
 				ts_lr = int(result[1])
 
-			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr)
+			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2])

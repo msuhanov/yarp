@@ -1092,6 +1092,8 @@ def test_sqlite():
 		pytest.skip()
 
 	with RegistrySqlite.YarpDB(hive_sqlite, ':memory:') as h:
+		assert h.info().recovered == 0
+
 		doesnt_exist = 9999999999
 
 		assert h.key(doesnt_exist) is None
@@ -1272,6 +1274,8 @@ def test_sqlite():
 		assert c == 6
 
 	with RegistrySqlite.YarpDB(hive_deleted_tree_partial_path, ':memory:') as h:
+		assert h.info().recovered == 0
+
 		doesnt_exist = 9999999999
 
 		assert h.key(doesnt_exist) is None
@@ -1361,6 +1365,8 @@ def test_sqlite():
 		assert c == 2
 
 	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', True) as h:
+		assert h.info().recovered == 0
+
 		doesnt_exist = 9999999999
 
 		assert h.key(doesnt_exist) is None
@@ -1414,6 +1420,8 @@ def test_sqlite():
 		assert c == 1
 
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:', True) as h:
+		assert h.info().recovered == 0
+
 		doesnt_exist = 9999999999
 
 		assert h.key(doesnt_exist) is None
@@ -1426,6 +1434,8 @@ def test_sqlite():
 			assert False
 
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:') as h:
+		assert h.info().recovered == 0
+
 		root_rowid = h.root_key().rowid
 		for i in h.values(root_rowid):
 			assert False
@@ -1461,6 +1471,11 @@ def test_sqlite():
 				assert False
 
 	with RegistrySqlite.YarpDB(hive_reallocvaluedata_sqlite, ':memory:') as h:
+		hi = h.info()
+		assert hi.recovered == 0
+		assert hi.last_written_timestamp == 131495536863659453
+		assert hi.last_reorganized_timestamp is None
+
 		root = h.root_key()
 
 		assert not root.is_deleted
@@ -1508,3 +1523,6 @@ def test_sqlite():
 			assert value.is_deleted
 
 		assert c == 1
+
+	with RegistrySqlite.YarpDB(hive_dirty_old, ':memory:') as h:
+		assert h.info().recovered == 1
