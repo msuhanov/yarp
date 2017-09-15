@@ -11,7 +11,7 @@ import argparse
 from collections import namedtuple
 
 PROGRAM_NAME = 'yarp-mount'
-PROGRAM_VERSION = '1.0.0-beta28'
+PROGRAM_VERSION = '1.0.0-beta29'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'mount_point' ])
 

@@ -86,11 +86,10 @@ class YarpDB(object):
 		else:
 			self._is_hive_truncated = False
 
+		self._recovered = False
 		self._db_clear()
 
 		if not self._is_hive_truncated:
-			self._recovered = False
-
 			# Recover the hive, if required.
 			if not no_recovery:
 				try:
