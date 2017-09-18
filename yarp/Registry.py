@@ -57,10 +57,16 @@ def DecodeFiletime(Timestamp):
 
 	return datetime(1601, 1, 1) + timedelta(microseconds = Timestamp / 10)
 
-def DecodeUnicode(Buffer, RemoveGarbage = False):
+def DecodeUnicode(Buffer, RemoveGarbage = False, StrictDecode = False):
 	"""Decode the Unicode (UTF-16LE) string and return it.
 	When 'RemoveGarbage' is True, this function will attempt to sanitize a null-terminated Unicode string.
+	When 'StrictDecode' is True, illegal characters will not be replaced.
 	"""
+
+	if StrictDecode:
+		err_resolution = 'strict'
+	else:
+		err_resolution = 'replace'
 
 	if RemoveGarbage and len(Buffer) > 2:
 		# Windows is using null-terminated Unicode strings, so we want to remove garbage, if any, after the end of the string.
@@ -68,11 +74,13 @@ def DecodeUnicode(Buffer, RemoveGarbage = False):
 		while pos < len(Buffer):
 			two_bytes = Buffer[pos : pos + 2]
 			if two_bytes == b'\x00\x00':
-				return Buffer[ : pos + 2].decode('utf-16le') # Include the null character to the output string.
+				return Buffer[ : pos + 2].decode('utf-16le', errors = err_resolution) # Include the null character to the output string.
 
 			pos += 2
 
-	return Buffer.decode('utf-16le')
+	return Buffer.decode('utf-16le', errors = err_resolution)
+
+unicode_replacement_character = b'\xfd\xff'.decode('utf-16le')
 
 def DecodeASCII(Buffer):
 	"""Decode the ASCII (extended) string and return it."""
@@ -545,18 +553,20 @@ class RegistryKey(object):
 						if curr_name not in subkeys_names:
 							subkeys_names.add(curr_name)
 						else:
-							if not self.naive:
-								raise WalkException('Duplicate subkey, key path: {}, name: {}'.format(self.path(), curr_name))
-							else:
-								# Do not build the path, if we are trying to recover a key node.
-								raise WalkException('Duplicate subkey')
+							if unicode_replacement_character not in curr_name:
+								if not self.naive:
+									raise WalkException('Duplicate subkey, key path: {}, name: {}'.format(self.path(), curr_name))
+								else:
+									# Do not build the path, if we are trying to recover a key node.
+									raise WalkException('Duplicate subkey')
 
 						if prev_name is not None and curr_name <= prev_name:
-							if not self.naive:
-								raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
-							else:
-								# Do not build the path, if we are trying to recover a key node.
-								raise WalkException('Wrong order of subkeys')
+							if unicode_replacement_character not in curr_name:
+								if not self.naive:
+									raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
+								else:
+									# Do not build the path, if we are trying to recover a key node.
+									raise WalkException('Wrong order of subkeys')
 
 						prev_name = curr_name
 
@@ -567,18 +577,20 @@ class RegistryKey(object):
 					if curr_name not in subkeys_names:
 						subkeys_names.add(curr_name)
 					else:
-						if not self.naive:
-							raise WalkException('Duplicate subkey, key path: {}, name: {}'.format(self.path(), curr_name))
-						else:
-							# Do not build the path, if we are trying to recover a key node.
-							raise WalkException('Duplicate subkey')
+						if unicode_replacement_character not in curr_name:
+							if not self.naive:
+								raise WalkException('Duplicate subkey, key path: {}, name: {}'.format(self.path(), curr_name))
+							else:
+								# Do not build the path, if we are trying to recover a key node.
+								raise WalkException('Duplicate subkey')
 
 					if prev_name is not None and curr_name <= prev_name:
-						if not self.naive:
-							raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
-						else:
-							# Do not build the path, if we are trying to recover a key node.
-							raise WalkException('Wrong order of subkeys')
+						if unicode_replacement_character not in curr_name:
+							if not self.naive:
+								raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
+							else:
+								# Do not build the path, if we are trying to recover a key node.
+								raise WalkException('Wrong order of subkeys')
 
 					prev_name = curr_name
 
@@ -626,11 +638,12 @@ class RegistryKey(object):
 				if curr_name not in values_names:
 					values_names.add(curr_name)
 				else:
-					if not self.naive:
-						raise WalkException('Duplicate value name, key path: {}, value name: {}'.format(self.path(), curr_name))
-					else:
-						# Do not build the path, if we are trying to recover a key node.
-						raise WalkException('Duplicate value name')
+					if unicode_replacement_character not in curr_name:
+						if not self.naive:
+							raise WalkException('Duplicate value name, key path: {}, value name: {}'.format(self.path(), curr_name))
+						else:
+							# Do not build the path, if we are trying to recover a key node.
+							raise WalkException('Duplicate value name')
 
 				yield curr_value
 
@@ -878,7 +891,7 @@ class RegistryValue(object):
 			return DecodeUnicode(data_raw, True)
 
 		if type_int == RegistryRecords.REG_LINK and data_length % 2 == 0 and data_length > 1:
-			return DecodeUnicode(data_raw)
+			return DecodeUnicode(data_raw, True)
 
 		if type_int == RegistryRecords.REG_MULTI_SZ and data_length % 2 == 0 and data_length > 1:
 			sz_list_data = DecodeUnicodeMulti(data_raw, True)

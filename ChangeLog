@@ -1,3 +1,12 @@
+Version: 1.0.0-beta30
+
+Registry: handle illegal characters in Unicode strings.
+RegistrySqlite: add the hive truncation status to a database.
+RegistryRecover: adjust the validation checks.
+Minor changes.
+
+---
+
 Version: 1.0.0-beta29
 
 RegistrySqlite: resolve the AttributeError bug.

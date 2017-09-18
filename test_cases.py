@@ -673,11 +673,14 @@ def test_unicode_garbage():
 
 	s = b'a\x00b\x00\x00\x00c\x00d\x00e'
 	assert Registry.DecodeUnicode(s, True) == u'ab\x00'
-	with pytest.raises(UnicodeDecodeError):
-		Registry.DecodeUnicode(s, False)
+	assert Registry.DecodeUnicode(s, False) == u'ab\x00cd' + b'\xfd\xff'.decode('utf-16le')
 
 	s = b'a\x00\x00\x00b\x00\x00\x00\x00\x00'
 	assert Registry.DecodeUnicodeMulti(s, True) == u'a\x00b\x00\x00'
+
+def test_unicode_illegal():
+	assert Registry.DecodeUnicode(b'\x74\x00\x00\xD8\x61\x00') == u't' + b'\xfd\xff'.decode('utf-16le') + 'a'
+	assert Registry.DecodeUnicode(b'\x00\xD8') == b'\xfd\xff'.decode('utf-16le')
 
 def test_security():
 	with open(hive_unicode, 'rb') as f:
@@ -1093,6 +1096,7 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_sqlite, ':memory:') as h:
 		assert h.info().recovered == 0
+		assert h.info().truncated == 0
 
 		doesnt_exist = 9999999999
 
@@ -1275,6 +1279,7 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_deleted_tree_partial_path, ':memory:') as h:
 		assert h.info().recovered == 0
+		assert h.info().truncated == 0
 
 		doesnt_exist = 9999999999
 
@@ -1366,6 +1371,7 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', True) as h:
 		assert h.info().recovered == 0
+		assert h.info().truncated == 0
 
 		doesnt_exist = 9999999999
 
@@ -1421,6 +1427,7 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:', True) as h:
 		assert h.info().recovered == 0
+		assert h.info().truncated == 1
 
 		doesnt_exist = 9999999999
 
@@ -1435,6 +1442,7 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:') as h:
 		assert h.info().recovered == 0
+		assert h.info().truncated == 1
 
 		root_rowid = h.root_key().rowid
 		for i in h.values(root_rowid):
@@ -1473,6 +1481,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_reallocvaluedata_sqlite, ':memory:') as h:
 		hi = h.info()
 		assert hi.recovered == 0
+		assert hi.truncated == 0
 		assert hi.last_written_timestamp == 131495536863659453
 		assert hi.last_reorganized_timestamp is None
 
@@ -1526,3 +1535,8 @@ def test_sqlite():
 
 	with RegistrySqlite.YarpDB(hive_dirty_old, ':memory:') as h:
 		assert h.info().recovered == 1
+		assert h.info().truncated == 0
+
+	with RegistrySqlite.YarpDB(hive_truncated, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 1

@@ -8,16 +8,24 @@ from __future__ import unicode_literals
 from . import Registry
 from . import RegistryFile
 
-MAX_PLAUSIBLE_SUBKEYS_COUNT = 80000
-MAX_PLAUSIBLE_VALUES_COUNT  = 70000
-MAX_PLAUSIBLE_NAME_LENGTH   = 2048
+MAX_PLAUSIBLE_SUBKEYS_COUNT = 10000
+MAX_PLAUSIBLE_VALUES_COUNT  = 1000
+MAX_PLAUSIBLE_NAME_LENGTH   = 1024
+MAX_PLAUSIBLE_NULL_COUNT    = 5
 
 def ValidateKey(Key):
 	"""Check whether or not a key looks plausible. If not, an exception is raised."""
 
 	key_name = Key.name()
+
 	if len(key_name) > MAX_PLAUSIBLE_NAME_LENGTH:
 		raise Registry.RegistryException('Implausible name length')
+
+	if key_name.count('\x00') > MAX_PLAUSIBLE_NULL_COUNT:
+		raise Registry.RegistryException('Implausible name')
+
+	if Registry.unicode_replacement_character in key_name:
+		raise Registry.RegistryException('Implausible name')
 
 	if Key.subkeys_count() > MAX_PLAUSIBLE_SUBKEYS_COUNT or Key.key_node.get_volatile_subkeys_count() > MAX_PLAUSIBLE_SUBKEYS_COUNT:
 		raise Registry.RegistryException('Implausible number of subkeys reported')
@@ -33,8 +41,15 @@ def ValidateValue(Value):
 	"""Check whether or not a value looks plausible. If not, an exception is raised."""
 
 	value_name = Value.name()
+
 	if len(value_name) > MAX_PLAUSIBLE_NAME_LENGTH:
 		raise Registry.RegistryException('Implausible name length')
+
+	if value_name.count('\x00') > MAX_PLAUSIBLE_NULL_COUNT:
+		raise Registry.RegistryException('Implausible name')
+
+	if Registry.unicode_replacement_character in value_name:
+		raise Registry.RegistryException('Implausible name')
 
 	if Value.key_value.is_data_inline():
 		if Value.key_value.get_data_size_real() > 4:

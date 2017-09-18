@@ -10,7 +10,7 @@ from collections import namedtuple
 
 Key = namedtuple('Key', [ 'rowid', 'is_deleted', 'name', 'classname', 'last_written_timestamp', 'access_bits', 'parent_key_id' ])
 Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'parent_key_id' ])
-HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered' ])
+HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated' ])
 
 class YarpDB(object):
 	"""This is an implementation of a registry hive to an sqlite3 database converter."""
@@ -23,7 +23,8 @@ class YarpDB(object):
 					'`last_written_timestamp` TEXT,'
 					'`last_reorganized_timestamp` TEXT,'
 					'`root_key_id` TEXT,'
-					'`recovered` NUMERIC'
+					'`recovered` NUMERIC,'
+					'`truncated` NUMERIC'
 					')')
 	"""Schema for the 'hive' table. Timestamps (here and in other places) are integers stored as text (FILETIME). Only one row is allowed in this table."""
 
@@ -99,8 +100,6 @@ class YarpDB(object):
 				else:
 					self._recovered = recovery_result.recovered
 
-			self._db_init()
-
 			try:
 				self._hive.walk_everywhere()
 			except RegistryFile.CellOffsetException:
@@ -111,9 +110,13 @@ class YarpDB(object):
 				self._is_hive_truncated = True
 				self._hive = Registry.RegistryHiveTruncated(self._primary)
 
+				self._db_init()
+
 				self._db_process_deleted_data()
 				self._db_process_partial_data()
 				return
+
+			self._db_init()
 
 			self._db_process_deleted_data()
 			self._db_process_data()
@@ -189,8 +192,13 @@ class YarpDB(object):
 		else:
 			recovered = 0
 
-		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`) VALUES (?, ?, ?, ?, ?)',
-			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered))
+		if self._is_hive_truncated:
+			truncated = 1
+		else:
+			truncated = 0
+
+		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`, `truncated`) VALUES (?, ?, ?, ?, ?, ?)',
+			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered, truncated))
 
 		# Set up the value ID counter, etc.
 		self._value_id = 0
@@ -250,6 +258,9 @@ class YarpDB(object):
 		try:
 			classname = key.classname()
 		except (Registry.RegistryException, UnicodeDecodeError):
+			if (not self._is_hive_truncated) and (not is_deleted):
+				raise
+
 			classname = None
 
 		last_written_timestamp = str(key.key_node.get_last_written_timestamp())
@@ -258,6 +269,9 @@ class YarpDB(object):
 		try:
 			parent_key = key.parent()
 		except Registry.RegistryException:
+			if (not self._is_hive_truncated) and (not is_deleted):
+				raise
+
 			parent_key_id = None
 		else:
 			if parent_key is not None:
@@ -289,7 +303,8 @@ class YarpDB(object):
 
 				self._db_add_value(value, key_id, is_deleted)
 		except (Registry.RegistryException, UnicodeDecodeError):
-			pass
+			if (not self._is_hive_truncated) and (not is_deleted):
+				raise
 
 		try:
 			for value in key.remnant_values():
@@ -298,7 +313,8 @@ class YarpDB(object):
 
 				self._db_add_value(value, key_id, 1)
 		except (Registry.RegistryException, UnicodeDecodeError):
-			pass
+			if (not self._is_hive_truncated) and (not is_deleted):
+				raise
 
 	def _db_add_value(self, value, parent_key_id, is_deleted = 0):
 		"""Add a value to the database."""
@@ -310,6 +326,9 @@ class YarpDB(object):
 		try:
 			data_raw = value.data_raw()
 		except Registry.RegistryException:
+			if (not self._is_hive_truncated) and (not is_deleted):
+				raise
+
 			data_raw = None
 
 		if is_deleted and self._db_is_reallocated_value_data(value):
@@ -440,7 +459,7 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered` FROM `hive` WHERE `id` = ?', (0,))
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered`, `truncated` FROM `hive` WHERE `id` = ?', (0,))
 		results = self.db_cursor.fetchall()
 
 		for result in results:
@@ -449,4 +468,4 @@ class YarpDB(object):
 			else:
 				ts_lr = int(result[1])
 
-			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2])
+			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2], truncated = result[3])
