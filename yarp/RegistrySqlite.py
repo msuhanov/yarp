@@ -313,8 +313,7 @@ class YarpDB(object):
 
 				self._db_add_value(value, key_id, 1)
 		except (Registry.RegistryException, UnicodeDecodeError):
-			if (not self._is_hive_truncated) and (not is_deleted):
-				raise
+			pass
 
 	def _db_add_value(self, value, parent_key_id, is_deleted = 0):
 		"""Add a value to the database."""
