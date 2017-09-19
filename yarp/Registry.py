@@ -561,7 +561,7 @@ class RegistryKey(object):
 									raise WalkException('Duplicate subkey')
 
 						if prev_name is not None and curr_name <= prev_name:
-							if unicode_replacement_character not in curr_name:
+							if unicode_replacement_character not in curr_name and unicode_replacement_character not in prev_name:
 								if not self.naive:
 									raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
 								else:
@@ -585,7 +585,7 @@ class RegistryKey(object):
 								raise WalkException('Duplicate subkey')
 
 					if prev_name is not None and curr_name <= prev_name:
-						if unicode_replacement_character not in curr_name:
+						if unicode_replacement_character not in curr_name and unicode_replacement_character not in prev_name:
 							if not self.naive:
 								raise WalkException('Wrong order of subkeys, key path: {}, offending name: {}'.format(self.path(), curr_name))
 							else:

@@ -1,3 +1,9 @@
+Version: 1.0.0-beta32
+
+Registry: handle illegal characters in Unicode strings #2.
+
+---
+
 Version: 1.0.0-beta31
 
 RegistrySqlite: tolerate errors in associated deleted values.

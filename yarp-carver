@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-carver'
-PROGRAM_VERSION = '1.0.0-beta31'
+PROGRAM_VERSION = '1.0.0-beta32'
 
 Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
 
