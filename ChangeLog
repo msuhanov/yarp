@@ -1,3 +1,10 @@
+Version: 1.0.0-beta33
+
+yarp-timeline: increase the speed of building a timeline.
+RegistrySqlite: allow multiple threads to use a connection.
+
+---
+
 Version: 1.0.0-beta32
 
 Registry: handle illegal characters in Unicode strings #2.

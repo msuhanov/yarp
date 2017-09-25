@@ -10,7 +10,7 @@ import os
 import sys
 
 PROGRAM_NAME = 'yarp-timeline'
-PROGRAM_VERSION = '1.0.0-beta32'
+PROGRAM_VERSION = '1.0.0-beta33'
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'faster' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
@@ -44,7 +44,7 @@ def extend_keys_list(do_deleted = False):
 		global keys_list
 
 		key_parsed = parse_key(key, False)
-		if key_parsed is not None and key_parsed not in keys_list:
+		if key_parsed is not None:
 			keys_list.append(key_parsed)
 
 		for subkey in key.subkeys():
@@ -69,7 +69,7 @@ def extend_keys_list(do_deleted = False):
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryKey:
 				key_parsed = parse_key(item, True)
-				if key_parsed is not None and key_parsed not in keys_list:
+				if key_parsed is not None:
 					keys_list.append(key_parsed)
 
 def parse_key(key, is_deleted):
@@ -139,6 +139,7 @@ else:
 	elif recovery_result.recovered and recovery_result.is_new_log and args.faster:
 		extend_keys_list()
 
+keys_list = list(set(keys_list))
 keys_list.sort(key = lambda x: x.timestamp, reverse = True)
 print_timeline(args.primary_file)
 

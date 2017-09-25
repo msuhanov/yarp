@@ -55,7 +55,7 @@ class YarpDB(object):
 		"""
 
 		# Open the database, open the cursor.
-		self._db_connection = sqlite3.connect(sqlite_path)
+		self._db_connection = sqlite3.connect(sqlite_path, check_same_thread = False)
 		self.db_cursor = self._db_connection.cursor()
 
 		# Open the primary file.
