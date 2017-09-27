@@ -1,7 +1,8 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 #
-# This module implements an sqlite3 interface (Python 3 only).
+# This module implements an sqlite3 interface with advanced features.
+# Python 3 only.
 
 from . import Registry, RegistryFile, RegistryRecover, RegistryHelpers
 import sqlite3

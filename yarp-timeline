@@ -4,13 +4,14 @@
 # (c) Maxim Suhanov
 
 from yarp import *
+from yarp import __version__
 import argparse
 from collections import namedtuple
 import os
 import sys
 
 PROGRAM_NAME = 'yarp-timeline'
-PROGRAM_VERSION = '1.0.0-beta33'
+PROGRAM_VERSION = __version__
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'faster' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])

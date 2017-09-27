@@ -3,7 +3,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
-from yarp import RegistryFuse
+from yarp import RegistryFuse, __version__
 import llfuse
 import os
 import sys
@@ -11,7 +11,7 @@ import argparse
 from collections import namedtuple
 
 PROGRAM_NAME = 'yarp-mount'
-PROGRAM_VERSION = '1.0.0-beta33'
+PROGRAM_VERSION = __version__
 
 Arguments = namedtuple('Arguments', [ 'primary_file', 'mount_point' ])
 

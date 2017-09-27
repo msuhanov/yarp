@@ -88,13 +88,22 @@ class YarpFS(llfuse.Operations):
 
 			v_set = set()
 			for value in key.values():
-				v_set.add(value.name())
+				value_name = value.name()
+				if value_name in v_set:
+					raise Registry.WalkException('Invalid Unicode characters in names of values')
+
+				v_set.add(value_name)
 				value_data_raw = value.data_raw()
 
 			do_cache = key.subkeys_count() > CACHE_SUBKEYS_COUNT
 
+			prev_sk_name = None
 			for subkey in key.subkeys():
 				sk_name = subkey.name()
+
+				if prev_sk_name is not None and sk_name.upper() <= prev_sk_name.upper():
+					raise Registry.WalkException('Invalid Unicode characters in names of keys')
+
 				if sk_name in v_set:
 					if key.cell_relative_offset in self._yarp_conflicts.keys():
 						self._yarp_conflicts[key.cell_relative_offset].append(sk_name)
@@ -108,6 +117,8 @@ class YarpFS(llfuse.Operations):
 						self._yarp_cache[key.cell_relative_offset] = { sk_name: subkey.cell_relative_offset }
 
 				process_key(subkey)
+
+				prev_sk_name = sk_name
 
 		process_key(registry_hive.root_key())
 

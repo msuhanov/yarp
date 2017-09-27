@@ -3,14 +3,14 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
-from yarp import RegistryCarve
+from yarp import RegistryCarve, __version__
 import argparse
 from collections import namedtuple
 import os
 import sys
 
 PROGRAM_NAME = 'yarp-carver'
-PROGRAM_VERSION = '1.0.0-beta33'
+PROGRAM_VERSION = __version__
 
 Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
 

@@ -1,3 +1,10 @@
+Version: 1.0.0-beta34
+
+RegistryFuse: handle illegal characters in Unicode strings.
+Minor changes.
+
+---
+
 Version: 1.0.0-beta33
 
 yarp-timeline: increase the speed of building a timeline.
