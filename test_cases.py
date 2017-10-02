@@ -1117,6 +1117,8 @@ def test_sqlite():
 		assert root.last_written_timestamp == 131491245452005837
 		assert root.access_bits == 0
 
+		assert h.get_rowid(doesnt_exist) is None
+
 		c = 0
 		for subkey in h.subkeys(root.rowid):
 			c += 1
@@ -1125,6 +1127,7 @@ def test_sqlite():
 			assert subkey.classname is None
 			assert subkey.access_bits == 0
 			assert not subkey.is_deleted
+			assert h.get_rowid(subkey.parent_key_id) == root.rowid
 
 			if subkey.name == 'A1':
 				a1 = subkey.rowid
@@ -1147,6 +1150,7 @@ def test_sqlite():
 			assert value.type == 1
 			assert value.data == b'A\x00A\x00A\x002\x00\x00\x00'
 			assert not value.is_deleted
+			assert h.get_rowid(value.parent_key_id) == a2
 
 		assert c == 1
 

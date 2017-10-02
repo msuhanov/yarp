@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+
+from yarp import RegistrySqlite
+
+# A primary file is specified here.
+primary_path = '<...>/SYSTEM'
+
+# Open the hive (with transaction log files) and recover it, if required.
+hive = RegistrySqlite.YarpDB(primary_path, ':memory:')
+
+# Print information about the hive.
+print(hive.info())
+
+# Pick a root key.
+root = hive.root_key()
+root_rowid = root.rowid
+
+# Print its details.
+print(root)
+
+# Print its subkeys.
+for subkey in hive.subkeys(root_rowid):
+	print(subkey)
+
+	# Pick a subkey.
+	if subkey.name == 'Select':
+		# Print its values.
+		for value in hive.values(subkey.rowid):
+			print(value)
+
+		# Check if a value points to the proper key.
+		assert hive.get_rowid(value.parent_key_id) == subkey.rowid
+
+	# Check if a subkey points to the root.
+	assert hive.get_rowid(subkey.parent_key_id) == root_rowid
+
+# Close the hive (and commit data to the database).
+hive.close()

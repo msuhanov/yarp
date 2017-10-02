@@ -514,9 +514,9 @@ class HiveBin(RegistryFile):
 		if signature != b'hbin':
 			raise HiveBinException('Invalid signature: {}'.format(signature))
 
-		hbin_file_offset = self.get_offset()
-		if hbin_file_offset != file_offset - BASE_BLOCK_LENGTH_PRIMARY:
-			raise HiveBinException('Offset mismatch: {} != {} - {}'.format(hbin_file_offset, file_offset, BASE_BLOCK_LENGTH_PRIMARY))
+		hbin_offset = self.get_offset()
+		if hbin_offset != file_offset - BASE_BLOCK_LENGTH_PRIMARY:
+			raise HiveBinException('Offset mismatch: {} != {} - {}'.format(hbin_offset, file_offset, BASE_BLOCK_LENGTH_PRIMARY))
 
 		hbin_size = self.get_size()
 		if hbin_size < HIVE_BIN_SIZE_ALIGNMENT or hbin_size % HIVE_BIN_SIZE_ALIGNMENT != 0:

@@ -367,6 +367,14 @@ class YarpDB(object):
 
 		process_key(self._hive.root_key())
 
+	def get_rowid(self, key_id):
+		"""Convert a key ID to a row ID."""
+
+		self.db_cursor.execute('SELECT `rowid` FROM `keys` WHERE `id` = ?', (key_id,))
+		results = self.db_cursor.fetchall()
+		for result in results:
+			return result[0]
+
 	def key(self, key_rowid):
 		"""Get and return a key by its row ID (or None, if not found)."""
 

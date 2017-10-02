@@ -6,6 +6,7 @@ setup(
 	version = __version__,
 	license = 'GPLv3',
 	packages = [ 'yarp' ],
+	provides = [ 'yarp' ],
 	scripts = [ 'yarp-carver', 'yarp-print', 'yarp-timeline', 'yarp-mount' ],
 	description = 'Yet another registry parser',
 	author = 'Maxim Suhanov',
