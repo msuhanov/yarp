@@ -22,7 +22,7 @@ not supported.
 3. Documentation
 
 See the docstrings in the module.
-For basic usage examples, see the 'Example' and 'Example.Advanced' files.
+For usage examples, see the 'Example' and 'Example.Advanced' files.
 
 4. License
 
@@ -31,7 +31,7 @@ See the 'License' file.
 
 5. Installation
 
-# pip3 install https://github.com/msuhanov/yarp/archive/1.0.0-beta35.tar.gz
+# pip3 install https://github.com/msuhanov/yarp/archive/1.0.0-beta36.tar.gz
 
 ---
 (c) Maxim Suhanov

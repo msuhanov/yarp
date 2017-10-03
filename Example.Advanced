@@ -28,8 +28,8 @@ for subkey in hive.subkeys(root_rowid):
 		for value in hive.values(subkey.rowid):
 			print(value)
 
-		# Check if a value points to the proper key.
-		assert hive.get_rowid(value.parent_key_id) == subkey.rowid
+			# Check if a value points to the proper key.
+			assert hive.get_rowid(value.parent_key_id) == subkey.rowid
 
 	# Check if a subkey points to the root.
 	assert hive.get_rowid(subkey.parent_key_id) == root_rowid
