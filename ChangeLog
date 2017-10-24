@@ -1,3 +1,12 @@
+Version: 1.0.0-beta37
+
+RegistryCarve: recover registry fragments, minor changes.
+RegistryFile: add a function to work with registry fragments.
+RegistrySqlite: handle registry fragments.
+yarp-carver: always recover registry fragments.
+
+---
+
 Version: 1.0.0-beta36
 
 Minor changes.

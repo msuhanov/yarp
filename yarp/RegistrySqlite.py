@@ -50,8 +50,8 @@ class YarpDB(object):
 					')')
 	"""Schema for the 'values' table."""
 
-	def __init__(self, primary_path, sqlite_path, no_recovery = False):
-		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry hive specified by 'primary_path'.
+	def __init__(self, primary_or_fragment_path, sqlite_path, no_recovery = False):
+		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry hive (or a registry fragment) specified by 'primary_or_fragment_path'.
 		When 'no_recovery' is True, transaction log files are not used to recover a primary file.
 		"""
 
@@ -60,10 +60,10 @@ class YarpDB(object):
 		self.db_cursor = self._db_connection.cursor()
 
 		# Open the primary file.
-		self._primary = open(primary_path, 'rb')
+		self._primary = open(primary_or_fragment_path, 'rb')
 
 		# Discover the transaction log files.
-		log_files = RegistryHelpers.DiscoverLogFiles(primary_path)
+		log_files = RegistryHelpers.DiscoverLogFiles(primary_or_fragment_path)
 
 		# Open the transaction log files.
 		self._log = None
@@ -81,8 +81,14 @@ class YarpDB(object):
 		# Create the hive object.
 		try:
 			self._hive = Registry.RegistryHive(self._primary)
-		except (RegistryFile.BaseBlockException, RegistryFile.NotSupportedException):
+		except RegistryFile.NotSupportedException:
 			raise
+		except RegistryFile.BaseBlockException:
+			temp_obj = self._primary
+			self._primary = RegistryFile.FragmentTranslator(temp_obj)
+			temp_obj.close()
+
+			self._is_hive_truncated = True
 		except Registry.RegistryException:
 			self._is_hive_truncated = True
 		else:

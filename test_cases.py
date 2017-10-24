@@ -74,6 +74,7 @@ hive_truncated_dirty = path.join(HIVES_DIR, 'TruncatedDirtyHive')
 
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
+hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
 
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
@@ -815,10 +816,11 @@ def test_comp():
 		hive = Registry.RegistryHive(f)
 		hive.walk_everywhere()
 
-def test_carving():
+@pytest.mark.parametrize('recover_fragments', [False, True])
+def test_carving(recover_fragments):
 	with open(hive_carving0, 'rb') as f:
 		carver = RegistryCarve.Carver(f)
-		for i in carver.carve():
+		for i in carver.carve(recover_fragments):
 			assert i.offset == 0
 			assert i.size == 8192
 			assert not i.truncated
@@ -826,11 +828,75 @@ def test_carving():
 
 	with open(hive_carving512, 'rb') as f:
 		carver = RegistryCarve.Carver(f)
-		for i in carver.carve():
+		for i in carver.carve(recover_fragments):
 			assert i.offset == 512
 			assert i.size == 8192
 			assert not i.truncated
 			assert i.truncation_scenario == 0
+
+	if not recover_fragments:
+		return
+
+	with open(hive_carving_fragments, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True):
+			if c == 0:
+				assert type(i) is RegistryCarve.CarveResultFragment
+				assert i.offset == 0
+				assert i.size == 512
+				assert i.hbin_start == 0
+
+				f.seek(i.offset)
+				src_buf = f.read(i.size)
+				src_obj = BytesIO(src_buf)
+				dst_obj = RegistryFile.FragmentTranslator(src_obj)
+				dst_buf = dst_obj.getvalue()[ 4096 + i.hbin_start : 4096 + i.hbin_start + i.size ]
+
+				assert src_buf == dst_buf
+
+				tmp_hive = Registry.RegistryHiveTruncated(dst_obj)
+			elif c == 1:
+				assert type(i) is RegistryCarve.CarveResult
+				assert i.offset == 512
+				assert i.size == 147456
+				assert not i.truncated
+				assert i.truncation_scenario == 0
+			elif c == 2:
+				assert type(i) is RegistryCarve.CarveResultFragment
+				assert i.offset == 147968
+				assert i.size == 12288
+				assert i.hbin_start == 0
+
+				f.seek(i.offset)
+				src_buf = f.read(i.size)
+				src_obj = BytesIO(src_buf)
+				dst_obj = RegistryFile.FragmentTranslator(src_obj)
+				dst_buf = dst_obj.getvalue()[ 4096 + i.hbin_start : 4096 + i.hbin_start + i.size ]
+
+				assert src_buf == dst_buf
+
+				tmp_hive = Registry.RegistryHiveTruncated(dst_obj)
+			elif c == 3:
+				assert type(i) is RegistryCarve.CarveResultFragment
+				assert i.offset == 262144
+				assert i.size == 512
+				assert i.hbin_start == 8192
+
+				f.seek(i.offset)
+				src_buf = f.read(i.size)
+				src_obj = BytesIO(src_buf)
+				dst_obj = RegistryFile.FragmentTranslator(src_obj)
+				dst_buf = dst_obj.getvalue()[ 4096 + i.hbin_start : 4096 + i.hbin_start + i.size ]
+
+				assert src_buf == dst_buf
+
+				tmp_hive = Registry.RegistryHiveTruncated(dst_obj)
+			else:
+				assert False
+
+			c += 1
 
 def test_remnants():
 	with open(hive_remnants, 'rb') as f:

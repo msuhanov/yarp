@@ -58,24 +58,35 @@ except (OSError, IOError):
 
 carver = RegistryCarve.Carver(f)
 print('Offset\tSize\tTruncated\tFile name')
-for carve_result in carver.carve():
-	print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
+for carve_result in carver.carve(True):
+	if type(carve_result) is RegistryCarve.CarveResult:
+		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
 
-	regf_filename = carve_result.filename
-	if regf_filename.rfind('\\') != -1:
-		regf_filename = regf_filename.split('\\')[-1]
-	regf_filename = make_sane_filename(regf_filename)
+		regf_filename = carve_result.filename
+		if regf_filename.rfind('\\') != -1:
+			regf_filename = regf_filename.split('\\')[-1]
+		regf_filename = make_sane_filename(regf_filename)
 
-	if carve_result.truncated:
-		output_filename = '{}_{}-truncated'.format(carve_result.offset, regf_filename)
+		if carve_result.truncated:
+			output_filename = '{}_{}-truncated'.format(carve_result.offset, regf_filename)
+		else:
+			output_filename = '{}_{}'.format(carve_result.offset, regf_filename)
+
+		output_file = os.path.join(args.output_dir, output_filename)
+
+		with open(output_file, 'wb') as out_f:
+			f.seek(carve_result.offset)
+			buf = f.read(carve_result.size)
+			out_f.write(buf)
 	else:
-		output_filename = '{}_{}'.format(carve_result.offset, regf_filename)
+		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<hive fragment>'))
 
-	output_file = os.path.join(args.output_dir, output_filename)
+		output_filename = '{}-fragment'.format(carve_result.offset)
+		output_file = os.path.join(args.output_dir, output_filename)
 
-	with open(output_file, 'wb') as out_f:
-		f.seek(carve_result.offset)
-		buf = f.read(carve_result.size)
-		out_f.write(buf)
+		with open(output_file, 'wb') as out_f:
+			f.seek(carve_result.offset)
+			buf = f.read(carve_result.size)
+			out_f.write(buf)
 
 f.close()

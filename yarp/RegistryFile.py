@@ -1298,3 +1298,65 @@ class PrimaryFileTruncated(object):
 			for cell_file_offset in self.cell_map_unallocated:
 				cell = HiveCell(self.file_object, cell_file_offset, self.baseblock.use_old_cell_format)
 				yield cell
+
+def FragmentTranslator(file_object, effective_version = 5):
+	"""This function is used to translate a hive bins fragment (a set of hive bins as a file object) to a truncated primary file (as a BytesIO object).
+	The BytesIO object is then returned.
+	"""
+
+	if effective_version not in MINOR_VERSION_NUMBERS_FOR_NEW_CELL_FORMAT:
+		raise NotSupportedException('Minor version not supported: {}'.format(effective_version))
+
+	reg_file = RegistryFile(file_object)
+
+	signature = reg_file.read_binary(0, 4)
+	if signature != b'hbin':
+		raise HiveBinException('Invalid signature: {}'.format(signature))
+
+	base_offset = reg_file.read_uint32(4)
+	if base_offset > 0 and base_offset % HIVE_BIN_SIZE_ALIGNMENT != 0:
+		raise HiveBinException('Invalid base offset: {}'.format(base_offset))
+
+	fragment_size = reg_file.get_file_size()
+	if fragment_size % HIVE_BIN_SIZE_ALIGNMENT == 0:
+		fragment_size_aligned = fragment_size
+	else:
+		fragment_size_aligned = fragment_size + HIVE_BIN_SIZE_ALIGNMENT - fragment_size % HIVE_BIN_SIZE_ALIGNMENT
+
+	allocation_size = BASE_BLOCK_LENGTH_PRIMARY + base_offset + fragment_size_aligned
+	truncated_primary_file_object = BytesIO(b'\x00' * allocation_size)
+
+	# Copy the fragment to the right location.
+	file_object.seek(0)
+	truncated_primary_file_object.seek(BASE_BLOCK_LENGTH_PRIMARY + base_offset)
+	buf = file_object.read()
+	truncated_primary_file_object.write(buf)
+
+	# Now we need to create a dummy base block.
+	reg_file = RegistryFile(truncated_primary_file_object)
+
+	reg_file.write_binary(0, b'regf')
+	reg_file.write_uint32(4, 1)
+	reg_file.write_uint32(8, 1)
+	reg_file.write_uint64(12, 0)
+	reg_file.write_uint32(20, 1)
+	reg_file.write_uint32(24, effective_version)
+	reg_file.write_uint32(28, FILE_TYPE_PRIMARY)
+	reg_file.write_uint32(32, FILE_FORMAT_DIRECT_MEMORY_LOAD)
+	reg_file.write_uint32(36, CELL_OFFSET_NIL)
+	reg_file.write_uint32(40, base_offset + fragment_size_aligned)
+	reg_file.write_uint32(44, FILE_CLUSTERING_FACTOR)
+	reg_file.write_binary(508, b'INVL')
+
+	# Now we need to create dummy hive bins.
+	pos = BASE_BLOCK_LENGTH_PRIMARY
+	while pos < BASE_BLOCK_LENGTH_PRIMARY + base_offset:
+		reg_file.write_binary(pos, b'hbin')
+		reg_file.write_uint32(pos + 4, pos - BASE_BLOCK_LENGTH_PRIMARY)
+		reg_file.write_uint32(pos + 8, HIVE_BIN_SIZE_ALIGNMENT)
+		reg_file.write_uint32(pos + 32, HIVE_BIN_SIZE_ALIGNMENT - 32)
+
+		pos += HIVE_BIN_SIZE_ALIGNMENT
+
+	# We are done.
+	return truncated_primary_file_object

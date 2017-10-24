@@ -11,13 +11,16 @@ from struct import unpack
 from collections import namedtuple
 
 CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
+CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start' ])
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
-HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size' ])
+HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
 CellsCheckResult = namedtuple('CellsCheckResult', [ 'are_valid', 'truncation_point_relative' ])
 
 SECTOR_SIZE = 512 # This is an assumed sector size.
 FILE_MARGIN_SIZE = 4*1024*1024 # We will read more bytes than specified in the base block to account possible damage scenarios.
 FILE_SIZE_MAX_MIB = 500 # We do not expect primary files to be larger than this (in MiB).
+CELL_SIZE_MAX = 2*1024*1024 # We do not expect cells to be larger than this.
+HBIN_SIZE_MAX = 64*1024*1024 # We do not expect hive bins to be larger than this.
 
 def CheckBaseBlockOfPrimaryFile(Buffer):
 	"""Check if Buffer contains a valid base block of a primary file and a hive bin, return a named tuple (BaseBlockCheckResult)."""
@@ -45,22 +48,31 @@ def CheckBaseBlockOfPrimaryFile(Buffer):
 
 	return BaseBlockCheckResult(is_valid = False, hbins_data_size = None, filename = None, old_cells = None)
 
-def CheckHiveBin(Buffer, ExpectedOffsetRelative):
+def CheckHiveBin(Buffer, ExpectedOffsetRelative, AllowSmallSize = False):
 	"""Check if Buffer contains a valid hive bin (without checking its cells), return a named tuple (HiveBinCheckResult)."""
 
-	if len(Buffer) < RegistryFile.HIVE_BIN_SIZE_ALIGNMENT:
-		return HiveBinCheckResult(is_valid = False, size = None)
+	if not AllowSmallSize:
+		min_size = RegistryFile.HIVE_BIN_SIZE_ALIGNMENT
+	else:
+		min_size = SECTOR_SIZE
+
+	if len(Buffer) < min_size:
+		return HiveBinCheckResult(is_valid = False, size = None, offset_relative = None)
 
 	signature, offset, size = unpack('<4sLL', Buffer[ : 12])
-	if signature == b'hbin' and offset == ExpectedOffsetRelative and size >= RegistryFile.HIVE_BIN_SIZE_ALIGNMENT and size % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0:
-		return HiveBinCheckResult(is_valid = True, size = size)
+	if (signature == b'hbin' and (offset == ExpectedOffsetRelative or ExpectedOffsetRelative is None) and size >= RegistryFile.HIVE_BIN_SIZE_ALIGNMENT and
+		size % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0 and size <= HBIN_SIZE_MAX and RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + offset <= FILE_SIZE_MAX_MIB * 1024 * 1024 and
+		(offset == 0 or offset % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0)):
 
-	return HiveBinCheckResult(is_valid = False, size = None)
+		return HiveBinCheckResult(is_valid = True, size = size, offset_relative = offset)
+
+	return HiveBinCheckResult(is_valid = False, size = None, offset_relative = None)
 
 def CheckCellsOfHiveBin(Buffer, OldCells = False):
 	"""Check if Buffer contains a hive bin with valid cells, return a named tuple (CellsCheckResult). A hive bin's header is not checked."""
 
 	curr_pos_relative = 32
+	prev_pos_relative = None
 	while curr_pos_relative < len(Buffer):
 		four_bytes = Buffer[curr_pos_relative : curr_pos_relative + 4]
 		if len(four_bytes) < 4:
@@ -74,9 +86,33 @@ def CheckCellsOfHiveBin(Buffer, OldCells = False):
 		else:
 			cell_size_alignment = 8
 
-		if cell_size_abs < cell_size_alignment or cell_size_abs % cell_size_alignment != 0:
+		if cell_size_abs < cell_size_alignment or cell_size_abs % cell_size_alignment != 0 or curr_pos_relative + cell_size_abs > len(Buffer) or cell_size_abs > CELL_SIZE_MAX:
+			if prev_pos_relative is None:
+				return CellsCheckResult(are_valid = False, truncation_point_relative = curr_pos_relative)
+
+			# Try to locate the exact truncation point by looking for some common signatures.
+			prev_cells = Buffer[32 : prev_pos_relative + prev_cell_size_abs]
+			hbin_signature_pos = prev_cells.rfind(b'hbin')
+			regf_signature_pos = prev_cells.rfind(b'regf')
+			if hbin_signature_pos == -1 and regf_signature_pos != -1:
+				signature_pos = regf_signature_pos
+			elif hbin_signature_pos != -1 and regf_signature_pos == -1:
+				signature_pos = hbin_signature_pos
+			elif hbin_signature_pos != -1 and regf_signature_pos != -1:
+				if regf_signature_pos > hbin_signature_pos:
+					signature_pos = hbin_signature_pos
+				else:
+					signature_pos = regf_signature_pos
+			else:
+				signature_pos = None
+
+			if signature_pos is not None:
+				return CellsCheckResult(are_valid = False, truncation_point_relative = 32 + signature_pos)
+
 			return CellsCheckResult(are_valid = False, truncation_point_relative = curr_pos_relative)
 
+		prev_cell_size_abs = cell_size_abs
+		prev_pos_relative = curr_pos_relative
 		curr_pos_relative += cell_size_abs
 
 	return CellsCheckResult(are_valid = True, truncation_point_relative = None)
@@ -101,8 +137,8 @@ class Carver(DiskImage):
 	def __init__(self, file_object):
 		super(Carver, self).__init__(file_object)
 
-	def carve(self):
-		"""This method yields named tuples (CarveResult)."""
+	def carve(self, recover_fragments = False):
+		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment)."""
 
 		pos = 0
 		file_size = self.size()
@@ -110,7 +146,7 @@ class Carver(DiskImage):
 			buf_size = RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT
 			buf = self.read(pos, buf_size)
 
-			if len(buf) < buf_size: # End of a file or a read error.
+			if len(buf) < SECTOR_SIZE or len(buf) % SECTOR_SIZE != 0: # End of a file or a read error.
 				break
 
 			four_bytes = buf[ : 4]
@@ -140,6 +176,9 @@ class Carver(DiskImage):
 							break
 
 						last_hbin_buf = regf_buf[curr_pos_relative : curr_pos_relative + check_result_hbin.size]
+						if len(last_hbin_buf) < check_result_hbin.size:
+							padding_length = check_result_hbin.size - len(last_hbin_buf)
+							last_hbin_buf += b'\x00' * padding_length
 
 						curr_pos_relative += check_result_hbin.size
 						expected_hbin_offset_relative += check_result_hbin.size
@@ -185,6 +224,52 @@ class Carver(DiskImage):
 					else:
 						pos += regf_size + SECTOR_SIZE - regf_size % SECTOR_SIZE
 
+					continue
+
+			elif four_bytes == b'hbin' and recover_fragments:
+				check_result_hbin = CheckHiveBin(buf, None, True)
+				if check_result_hbin.is_valid:
+					fragment_offset = pos
+					fragment_hbin_start = check_result_hbin.offset_relative
+
+					expected_hbin_offset_relative = check_result_hbin.offset_relative
+
+					fragment_size = 0 # This value will be adjusted in the loop below.
+					curr_pos_relative = 0 # We will scan the first hive bin in a current fragment again.
+					while True:
+						hbin_buf_partial = self.read(pos + curr_pos_relative, RegistryFile.HIVE_BIN_SIZE_ALIGNMENT)
+
+						check_result_hbin = CheckHiveBin(hbin_buf_partial, expected_hbin_offset_relative, True)
+						if not check_result_hbin.is_valid:
+							break
+
+						hbin_buf = self.read(pos + curr_pos_relative, check_result_hbin.size)
+						if len(hbin_buf) < check_result_hbin.size:
+							padding_length = check_result_hbin.size - len(hbin_buf)
+							hbin_buf += b'\x00' * padding_length
+
+						check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
+						if check_result_cells.are_valid:
+							curr_pos_relative += check_result_hbin.size
+							fragment_size += check_result_hbin.size
+							expected_hbin_offset_relative += check_result_hbin.size
+							continue
+
+						fragment_size += check_result_cells.truncation_point_relative
+						break
+
+					if fragment_size == 0:
+						# A read error when checking the first hive bin in a current fragment for the second time.
+						break
+
+					# Adjust the fragment size according to the sector size.
+					fragment_size = fragment_size // SECTOR_SIZE * SECTOR_SIZE
+					if fragment_size == 0:
+						fragment_size = SECTOR_SIZE # Something is wrong with the hive bin in a fragment (like a format violation).
+
+					yield CarveResultFragment(offset = fragment_offset, size = fragment_size, hbin_start = fragment_hbin_start)
+
+					pos += fragment_size
 					continue
 
 			pos += SECTOR_SIZE
