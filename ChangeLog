@@ -1,3 +1,12 @@
+Version: 1.0.0-beta38
+
+Registry: tolerate truncated cell data in truncated hives.
+RegistryHelpers: add functions to work with the LZNT1 compression (NTFS).
+RegistryCarve: recover compressed data (LZNT1), minor changes.
+yarp-carver: always recover compressed data (LZNT1).
+
+---
+
 Version: 1.0.0-beta37
 
 RegistryCarve: recover registry fragments, minor changes.

@@ -943,7 +943,11 @@ class RegistryHiveTruncated(object):
 		"""This method yields RegistryKey objects for keys and RegistryValue objects for values."""
 
 		for cell in self.registry_file.cells():
-			cell_data = cell.get_cell_data()
+			try:
+				cell_data = cell.get_cell_data()
+			except RegistryException:
+				continue
+
 			if len(cell_data) > 76: # A key node with at least one character in the name.
 				try:
 					key = RegistryKey(self.registry_file, cell_data, None, None, True, False)

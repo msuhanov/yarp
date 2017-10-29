@@ -5,13 +5,18 @@
 
 from __future__ import unicode_literals
 
-from . import RegistryFile
+from . import RegistryFile, RegistryHelpers
 from .Registry import DecodeUnicode
+from io import BytesIO
 from struct import unpack
 from collections import namedtuple
 
 CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
 CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start' ])
+
+CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
+CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
+
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
 HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
 CellsCheckResult = namedtuple('CellsCheckResult', [ 'are_valid', 'truncation_point_relative' ])
@@ -61,7 +66,7 @@ def CheckHiveBin(Buffer, ExpectedOffsetRelative, AllowSmallSize = False):
 
 	signature, offset, size = unpack('<4sLL', Buffer[ : 12])
 	if (signature == b'hbin' and (offset == ExpectedOffsetRelative or ExpectedOffsetRelative is None) and size >= RegistryFile.HIVE_BIN_SIZE_ALIGNMENT and
-		size % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0 and size <= HBIN_SIZE_MAX and RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + offset <= FILE_SIZE_MAX_MIB * 1024 * 1024 and
+		size % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0 and size <= HBIN_SIZE_MAX and RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + offset < FILE_SIZE_MAX_MIB * 1024 * 1024 and
 		(offset == 0 or offset % RegistryFile.HIVE_BIN_SIZE_ALIGNMENT == 0)):
 
 		return HiveBinCheckResult(is_valid = True, size = size, offset_relative = offset)
@@ -117,8 +122,21 @@ def CheckCellsOfHiveBin(Buffer, OldCells = False):
 
 	return CellsCheckResult(are_valid = True, truncation_point_relative = None)
 
+def ValidateRandomFragment(Buffer):
+	"""Check if Buffer contains a plausible registry fragment. This function is used to identify NTFS decompression errors, so only a basic check is performed."""
+
+	offset = 0
+	while offset < len(Buffer):
+		signature = Buffer[offset : offset + 4]
+		if signature == b'hbin':
+			return True
+
+		offset += RegistryFile.HIVE_BIN_SIZE_ALIGNMENT
+
+	return False
+
 class DiskImage(object):
-	"""This class is used to read from a disk image (or a similar source)."""
+	"""This class is used to read from a disk image (or a similar source that is aligned to 512 bytes)."""
 
 	def __init__(self, file_object):
 		self.file_object = file_object
@@ -132,13 +150,22 @@ class DiskImage(object):
 		return self.file_object.read(size)
 
 class Carver(DiskImage):
-	"""This class is used to carve registry files (primary) from a disk image."""
+	"""This class is used to carve registry files (primary) and registry fragments from a disk image."""
 
 	def __init__(self, file_object):
 		super(Carver, self).__init__(file_object)
 
-	def carve(self, recover_fragments = False):
-		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment)."""
+	def carve(self, recover_fragments = False, ntfs_decompression = False):
+		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment).
+		When 'ntfs_decompression' is True, data from compression units will be also recovered, this will yield
+		CarveResultCompressed and, if 'recover_fragments' is also True, CarveResultFragmentCompressed named tuples.
+		Note:
+		Only the first bytes of each sector will be scanned for signatures, because registry files (primary) are always larger than
+		an NTFS file record (a primary file is at least 8192 bytes in length, while a file record is 1024 or 4096 bytes in length),
+		so the carver can skip data stored inside a file record (not starting at a sector boundary).
+		"""
+
+		compressed_regf_fragments = []
 
 		pos = 0
 		file_size = self.size()
@@ -271,5 +298,65 @@ class Carver(DiskImage):
 
 					pos += fragment_size
 					continue
+
+			elif ntfs_decompression:
+				# A compression unit may contain data belonging to another file in the slack space. Even a new compression unit may be in the slack space.
+				# Here, the slack space is an area from the end of compressed clusters to the end of a corresponding compression unit.
+				# Thus, we cannot skip over a processed compression unit without scanning the slack space.
+				# We also track offsets of compressed units belonging to primary files, so we will not report their hive bins as fragments later.
+
+				seven_bytes = buf[ : 7]
+				if RegistryHelpers.NTFSCheckCompressedSignature(seven_bytes, b'regf'):
+					buf_compressed = self.read(pos, RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE)
+					buf_decompressed = RegistryHelpers.NTFSDecompressUnit(buf_compressed)
+
+					if len(buf_decompressed) == RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE:
+						check_result = CheckBaseBlockOfPrimaryFile(buf_decompressed)
+						if check_result.is_valid:
+							regf_offset = pos
+							regf_buf_obj = BytesIO()
+							regf_buf_obj.write(buf_decompressed)
+
+							compressed_regf_fragments.append(pos)
+
+							curr_pos_relative = RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE
+							while regf_buf_obj.tell() < RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + check_result.hbins_data_size:
+								buf_raw = self.read(pos + curr_pos_relative, RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE)
+								if len(buf_raw) != RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE:
+									break # Truncated compression unit.
+
+								compressed_regf_fragments.append(pos + curr_pos_relative)
+
+								buf_decompressed = RegistryHelpers.NTFSDecompressUnit(buf_raw)
+
+								if len(buf_decompressed) == RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE:
+									regf_buf_obj.write(buf_decompressed)
+								else:
+									if len(buf_decompressed) > 0 and ValidateRandomFragment(buf_decompressed):
+										regf_buf_obj.write(buf_decompressed)
+										break # We are at the end of a compressed file (or we got bogus data in the compression unit).
+									elif ValidateRandomFragment(buf_raw):
+										regf_buf_obj.write(buf_raw) # Literal (not compressed) data run.
+									else:
+										break # Bogus data.
+
+								curr_pos_relative += RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE
+
+							regf_buf = regf_buf_obj.getvalue()
+							regf_buf_obj.close()
+
+							yield CarveResultCompressed(offset = regf_offset, buffer_decompressed = regf_buf, filename = check_result.filename)
+
+				elif recover_fragments and pos not in compressed_regf_fragments and RegistryHelpers.NTFSCheckCompressedSignature(seven_bytes, b'hbin'):
+					buf_compressed = self.read(pos, RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE)
+					buf_decompressed = RegistryHelpers.NTFSDecompressUnit(buf_compressed)
+
+					if len(buf_decompressed) == RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE:
+						check_result_hbin = CheckHiveBin(buf_decompressed, None)
+						if check_result_hbin.is_valid:
+							fragment_offset = pos
+
+							yield CarveResultFragmentCompressed(offset = fragment_offset, buffer_decompressed = buf_decompressed,
+								hbin_start = check_result_hbin.offset_relative)
 
 			pos += SECTOR_SIZE

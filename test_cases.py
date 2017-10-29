@@ -75,6 +75,7 @@ hive_truncated_dirty = path.join(HIVES_DIR, 'TruncatedDirtyHive')
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
+hive_carving_compressed = path.join(HIVES_DIR, 'Carving', 'NTFSCompressed')
 
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
@@ -897,6 +898,38 @@ def test_carving(recover_fragments):
 				assert False
 
 			c += 1
+
+@pytest.mark.parametrize('recover_fragments', [False, True])
+def test_compressed_carving(recover_fragments):
+	with open(hive_carving_compressed, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		for i in carver.carve(recover_fragments, False):
+			assert False
+
+		c = 0
+		for i in carver.carve(recover_fragments, True):
+			if type(i) is RegistryCarve.CarveResultCompressed:
+				assert i.offset == 0
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:143360]).hexdigest() == '424efa25eaa1183dfe9a332ee04f07e1'
+
+			elif type(i) is RegistryCarve.CarveResultFragmentCompressed:
+				assert i.offset == 135168
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:8192]).hexdigest() == '9ce06fccb5872991a1cc93fdb76d4d33'
+
+			else:
+				assert False
+
+			c += 1
+
+		if recover_fragments:
+			assert c == 2
+		else:
+			assert c == 1
 
 def test_remnants():
 	with open(hive_remnants, 'rb') as f:
