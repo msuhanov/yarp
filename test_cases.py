@@ -76,6 +76,8 @@ hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
 hive_carving_compressed = path.join(HIVES_DIR, 'Carving', 'NTFSCompressed')
+hive_carving_compressed_noslack = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlack')
+hive_carving_compressed_noslack_1024 = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlackCluster1024')
 
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
@@ -930,6 +932,75 @@ def test_compressed_carving(recover_fragments):
 			assert c == 2
 		else:
 			assert c == 1
+
+	with open(hive_carving_compressed_noslack, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		for i in carver.carve(recover_fragments, False):
+			assert False
+
+		c = 0
+		for i in carver.carve(recover_fragments, True):
+			if type(i) is RegistryCarve.CarveResultCompressed:
+				assert i.offset == 0
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:143360]).hexdigest() == '424efa25eaa1183dfe9a332ee04f07e1'
+
+			elif type(i) is RegistryCarve.CarveResultFragmentCompressed:
+				assert i.offset == 81920
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:8192]).hexdigest() == '9ce06fccb5872991a1cc93fdb76d4d33'
+
+			else:
+				assert False
+
+			c += 1
+
+		if recover_fragments:
+			assert c == 2
+		else:
+			assert c == 1
+
+	with open(hive_carving_compressed_noslack_1024, 'rb') as f:
+		old_cluster_size = RegistryHelpers.NTFS_CLUSTER_SIZE
+		old_compression_unit_size = RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE
+
+		RegistryHelpers.NTFS_CLUSTER_SIZE = 1024
+		RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE = 16 * 1024
+
+		carver = RegistryCarve.Carver(f)
+
+		for i in carver.carve(recover_fragments, False):
+			assert False
+
+		c = 0
+		for i in carver.carve(recover_fragments, True):
+			if type(i) is RegistryCarve.CarveResultCompressed:
+				assert i.offset == 512
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:143360]).hexdigest() == '424efa25eaa1183dfe9a332ee04f07e1'
+
+			elif type(i) is RegistryCarve.CarveResultFragmentCompressed:
+				assert i.offset == 102912
+				assert len(i.buffer_decompressed) > 0
+
+				assert md5(i.buffer_decompressed[:8192]).hexdigest() == '9ce06fccb5872991a1cc93fdb76d4d33'
+
+			else:
+				assert False
+
+			c += 1
+
+		if recover_fragments:
+			assert c == 2
+		else:
+			assert c == 1
+
+		RegistryHelpers.NTFS_CLUSTER_SIZE = old_cluster_size
+		RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE = old_compression_unit_size
 
 def test_remnants():
 	with open(hive_remnants, 'rb') as f:

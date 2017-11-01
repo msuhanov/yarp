@@ -10,7 +10,8 @@ from collections import namedtuple
 from io import BytesIO
 from struct import unpack
 
-NTFS_COMPRESSION_UNIT_SIZE = 16 * 4096 # 16 clusters, 4096 bytes per cluster.
+NTFS_CLUSTER_SIZE = 4096
+NTFS_COMPRESSION_UNIT_SIZE = 16 * NTFS_CLUSTER_SIZE
 
 DiscoveredLogFiles = namedtuple('DiscoveredLogFiles', [ 'log_path', 'log1_path', 'log2_path' ])
 
@@ -116,7 +117,7 @@ def NTFSDecompressUnit(Buffer):
 	def is_valid_write_request(offset, length):
 		return offset + length <= 2*1024*1024*1024 # Reject obviously invalid write requests.
 
-	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE:
+	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
 		return # Invalid length of input data.
 
 	compression_bits = [ 0 ] * 4096
@@ -254,20 +255,35 @@ def NTFSDecompressUnit(Buffer):
 				if bogus_data:
 					break
 
-		if dst_chunk_start + 4096 > dst_index:
-			dst_skip = dst_chunk_start + 4096 - dst_index
-
-			if is_valid_write_request(dst_index, dst_skip):
-				dbuf_obj.seek(dst_index)
-				bytes_ = b'\x00' * dst_skip
-				dbuf_obj.write(bytes_)
-
-				dst_index += dst_skip
+		if bogus_data:
+			break
 
 	dbuf = dbuf_obj.getvalue()
 	dbuf_obj.close()
 
 	return dbuf
+
+def NTFSDecompressUnitWithNoSlack(Buffer):
+	"""Decompress NTFS data from Buffer (a single compression unit) using the LZNT1 algorithm, return a tuple (decompressed_buffer, effective_unit_size).
+	The effective unit size will be equal to or less than NTFS_COMPRESSION_UNIT_SIZE. This function should be used if compression units are not aligned on a disk (there is no slack space).
+	"""
+
+	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
+		return # Invalid length of input data.
+
+	pos = 0
+	while pos < len(Buffer) and pos < NTFS_COMPRESSION_UNIT_SIZE - NTFS_CLUSTER_SIZE:
+		curr_buf = Buffer[ : pos + NTFS_CLUSTER_SIZE]
+		if len(curr_buf) < NTFS_CLUSTER_SIZE or len(curr_buf) % NTFS_CLUSTER_SIZE != 0:
+			break
+
+		curr_buf_d = NTFSDecompressUnit(curr_buf)
+		if len(curr_buf_d) == NTFS_COMPRESSION_UNIT_SIZE:
+			return (curr_buf_d, pos + NTFS_CLUSTER_SIZE)
+
+		pos += NTFS_CLUSTER_SIZE
+
+	return (NTFSDecompressUnit(Buffer), NTFS_COMPRESSION_UNIT_SIZE)
 
 def NTFSCheckCompressedSignature(Buffer, Signature):
 	"""Check if Buffer (a compressed block) contains a given signature (which cannot be compressed). The LZNT1 algorithm is assumed."""

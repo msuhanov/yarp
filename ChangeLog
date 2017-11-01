@@ -1,3 +1,9 @@
+Version: 1.0.0-beta39
+
+RegistryCarve, RegistryHelpers: improve the compressed data (LZNT1) recovery.
+
+---
+
 Version: 1.0.0-beta38
 
 Registry: tolerate truncated cell data in truncated hives.
