@@ -1642,6 +1642,7 @@ def test_sqlite():
 		for i in h.values(rowid):
 			assert False
 
+		prev_name_i = None
 		for i in h.values(rowid):
 			for j in h.values(i.rowid):
 				assert False
@@ -1650,6 +1651,8 @@ def test_sqlite():
 				assert False
 
 			assert int(i.name) > 0
+			if prev_name_i is not None:
+				assert int(i.name) > prev_name_i
 
 			doesnt_exist = 9999999999
 
@@ -1661,6 +1664,8 @@ def test_sqlite():
 
 			for i in h.values(doesnt_exist):
 				assert False
+
+			prev_name_i = int(i.name)
 
 	with RegistrySqlite.YarpDB(hive_reallocvaluedata_sqlite, ':memory:') as h:
 		hi = h.info()

@@ -424,7 +424,7 @@ class YarpDB(object):
 		p = self.db_cursor.fetchone()
 		if p is not None:
 			p = p[0]
-			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ?', (p,))
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ? ORDER BY UPPER(`name`) ASC', (p,))
 			results = self.db_cursor.fetchall()
 
 			for result in results:
@@ -437,13 +437,13 @@ class YarpDB(object):
 		if root_key is not None:
 			p = root_key.rowid
 
-			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL AND `rowid` != ?', (p,))
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL AND `rowid` != ? ORDER BY UPPER(`name`) ASC', (p,))
 			results = self.db_cursor.fetchall()
 
 			for result in results:
 				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 		else:
-			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL')
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` IS NULL ORDER BY UPPER(`name`) ASC')
 			results = self.db_cursor.fetchall()
 
 			for result in results:
@@ -465,7 +465,7 @@ class YarpDB(object):
 		p = self.db_cursor.fetchone()
 		if p is not None:
 			p = p[0]
-			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ?', (p,))
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ? ORDER BY UPPER(`name`) ASC', (p,))
 			results = self.db_cursor.fetchall()
 
 			for result in results:
@@ -474,7 +474,7 @@ class YarpDB(object):
 	def values_deleted(self):
 		"""Get and yield all deleted values."""
 
-		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` IS NULL')
+		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` IS NULL ORDER BY UPPER(`name`) ASC')
 		results = self.db_cursor.fetchall()
 
 		for result in results:
