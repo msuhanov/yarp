@@ -17,7 +17,7 @@ Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
 def parse_args():
 	"""Parse command line arguments and return a named tuple (Arguments)."""
 
-	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry files from a disk image (or a similar source).', add_help = False, prefix_chars = '-')
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry files and fragments from a disk image (or a similar source).', add_help = False, prefix_chars = '-')
 
 	group_main = parser.add_argument_group('Main arguments')
 	group_misc = parser.add_argument_group('Miscellaneous arguments')

@@ -1,3 +1,14 @@
+Version: 1.0.0
+
+Stable release.
+
+RegistryFuse: handle illegal characters in Unicode strings #2.
+RegistryFile: handle the old cell format in registry fragments.
+RegistrySqlite: mark registry fragments as rebuilt hives in a database, open existing databases without primary files.
+yarp-print: handle truncated dirty hives.
+
+---
+
 Version: 1.0.0-beta39
 
 RegistryCarve, RegistryHelpers: improve the compressed data (LZNT1) recovery.

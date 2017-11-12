@@ -83,6 +83,9 @@ hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
 
+fragment_sqlite = path.join(HIVES_DIR, 'SqliteFragment')
+fragment_sqlite_db = path.join(HIVES_DIR, 'SqliteFragment.sqlite')
+
 log_discovery = [
 	path.join(HIVES_DIR, 'Discovery', '1', 'aa'),
 	path.join(HIVES_DIR, 'Discovery', '2', 'AA'),
@@ -1267,6 +1270,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_sqlite, ':memory:') as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
 
 		doesnt_exist = 9999999999
 
@@ -1454,6 +1458,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_deleted_tree_partial_path, ':memory:') as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
 
 		doesnt_exist = 9999999999
 
@@ -1546,6 +1551,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_reallocvalue_sqlite, ':memory:', True) as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
 
 		doesnt_exist = 9999999999
 
@@ -1602,6 +1608,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:', True) as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 1
+		assert h.info().rebuilt == 0
 
 		doesnt_exist = 9999999999
 
@@ -1617,6 +1624,7 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_truncated_dirty, ':memory:') as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 1
+		assert h.info().rebuilt == 0
 
 		root_rowid = h.root_key().rowid
 		for i in h.values(root_rowid):
@@ -1628,6 +1636,8 @@ def test_sqlite():
 
 			assert i.name == 'key_with_many_subkeys'
 			rowid = i.rowid
+
+		assert c == 1
 
 		for i in h.values(rowid):
 			assert False
@@ -1656,6 +1666,7 @@ def test_sqlite():
 		hi = h.info()
 		assert hi.recovered == 0
 		assert hi.truncated == 0
+		assert hi.rebuilt == 0
 		assert hi.last_written_timestamp == 131495536863659453
 		assert hi.last_reorganized_timestamp is None
 
@@ -1710,7 +1721,107 @@ def test_sqlite():
 	with RegistrySqlite.YarpDB(hive_dirty_old, ':memory:') as h:
 		assert h.info().recovered == 1
 		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
 
 	with RegistrySqlite.YarpDB(hive_truncated, ':memory:') as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 1
+		assert h.info().rebuilt == 0
+
+	with RegistrySqlite.YarpDB(fragment_sqlite, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 1
+		assert h.info().rebuilt == 1
+
+		root = h.root_key()
+
+		assert not root.is_deleted
+		assert root.name == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+		assert root.classname is None
+		assert root.last_written_timestamp == 131491245452005837
+		assert root.access_bits == 0
+
+		c = 0
+		for subkey in h.subkeys(root.rowid):
+			c += 1
+
+			assert (subkey.name == 'A1' and subkey.last_written_timestamp == 131491247867995634) or (subkey.name == 'A2' and subkey.last_written_timestamp == 131491246443034697)
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+			assert not subkey.is_deleted
+			assert h.get_rowid(subkey.parent_key_id) == root.rowid
+
+		assert c == 2
+
+	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 1
+		assert h.info().rebuilt == 1
+
+		root = h.root_key()
+
+		assert not root.is_deleted
+		assert root.name == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+		assert root.classname is None
+		assert root.last_written_timestamp == 131491245452005837
+		assert root.access_bits == 0
+
+		c = 0
+		for subkey in h.subkeys(root.rowid):
+			c += 1
+
+			assert (subkey.name == 'A1' and subkey.last_written_timestamp == 131491247867995634) or (subkey.name == 'A2' and subkey.last_written_timestamp == 131491246443034697)
+			assert subkey.classname is None
+			assert subkey.access_bits == 0
+			assert not subkey.is_deleted
+			assert h.get_rowid(subkey.parent_key_id) == root.rowid
+
+			if subkey.name == 'A1':
+				a1 = subkey.rowid
+			else:
+				a2 = subkey.rowid
+
+		assert c == 2
+
+		c = 0
+		for subkey in h.subkeys(a2):
+			c += 1
+
+		assert c == 0
+
+		c = 0
+		for value in h.values(a2):
+			c += 1
+
+			assert value.name == 'A2'
+			assert value.type == 1
+			assert value.data == b'A\x00A\x00A\x002\x00\x00\x00'
+			assert not value.is_deleted
+			assert h.get_rowid(value.parent_key_id) == a2
+
+		assert c == 1
+
+		c = 0
+		for value in h.values(a1):
+			c += 1
+
+			assert value.name == 'AAA1'
+			assert value.type == 1
+			assert value.data == b'\x00\x00'
+			assert not value.is_deleted
+
+		assert c == 1
+
+		def process_rowid(rowid):
+			for i in h.values(rowid):
+				pass
+
+			for i in h.subkeys(rowid):
+				process_rowid(i.rowid)
+
+		process_rowid(root.rowid)
+		for i in h.subkeys_unassociated():
+			process_rowid(i.rowid)
+
+		for i in h.values_deleted():
+			pass

@@ -199,29 +199,38 @@ def print_deleted_key(key):
 	print()
 
 # Currently, we can use functions for deleted keys and values to print keys and values in a truncated hive.
-print_truncated_key = print_deleted_key
 print_truncated_value = print_deleted_value
+print_truncated_key = print_deleted_key
 
-args = parse_args()
+def process_normal_hive(hive):
+	print('Hive information:')
+	print()
+	print_hive_information(hive)
 
-if not os.path.isfile(args.primary_file):
-	print('Primary file does not exist: {}'.format(args.primary_file), file = sys.stderr)
-	sys.exit(255)
+	print('Keys and values:')
+	print()
+	print_key_recursive(hive.root_key())
 
-primary = open(args.primary_file, 'rb')
+	if args.do_deleted:
+		print('Deleted keys and values (may contain reallocated data):')
+		print()
 
-try:
-	hive = Registry.RegistryHive(primary)
-except (RegistryFile.BaseBlockException, RegistryFile.NotSupportedException):
-	raise
-except Registry.RegistryException:
-	truncated = True
-else:
-	truncated = False
+		scanner = RegistryRecover.Scanner(hive)
+		deleted_values = []
 
-if truncated:
+		for item in scanner.scan():
+			if type(item) is Registry.RegistryKey:
+				print_deleted_key(item)
+			elif type(item) is Registry.RegistryValue:
+				deleted_values.append(item)
+
+		print('Deleted values (all, may contain reallocated data):')
+		print()
+		for value in deleted_values:
+			print_deleted_value(value)
+
+def process_truncated_hive(hive):
 	print('Primary file seems to be truncated, only available keys and values will be printed', file = sys.stderr)
-	hive = Registry.RegistryHiveTruncated(primary)
 
 	print('Hive information:')
 	print()
@@ -260,6 +269,29 @@ if truncated:
 		for value in deleted_values:
 			print_deleted_value(value)
 
+args = parse_args()
+
+if not os.path.isfile(args.primary_file):
+	print('Primary file does not exist: {}'.format(args.primary_file), file = sys.stderr)
+	sys.exit(255)
+
+primary = open(args.primary_file, 'rb')
+
+try:
+	hive = Registry.RegistryHive(primary)
+except (RegistryFile.BaseBlockException, RegistryFile.NotSupportedException):
+	raise
+except Registry.RegistryException:
+	truncated = True
+else:
+	truncated = False
+
+if truncated:
+	hive = Registry.RegistryHiveTruncated(primary)
+	process_truncated_hive(hive)
+
+	hive = None
+	primary.close()
 	sys.exit(0)
 
 if args.do_recovery:
@@ -281,34 +313,21 @@ if args.do_recovery:
 		recovery_result = hive.recover_auto(log, log1, log2)
 	except Registry.AutoRecoveryException:
 		print('An error has occurred when recovering a hive using a transaction log', file = sys.stderr)
+		recovered = False
+	else:
+		recovered = recovery_result.recovered
 
-hive.walk_everywhere()
+try:
+	hive.walk_everywhere()
+except RegistryFile.CellOffsetException:
+	if args.do_recovery and recovered:
+		raise
 
-print('Hive information:')
-print()
-print_hive_information(hive)
-
-print('Keys and values:')
-print()
-print_key_recursive(hive.root_key())
-
-if args.do_deleted:
-	print('Deleted keys and values (may contain reallocated data):')
-	print()
-
-	scanner = RegistryRecover.Scanner(hive)
-	deleted_values = []
-
-	for item in scanner.scan():
-		if type(item) is Registry.RegistryKey:
-			print_deleted_key(item)
-		elif type(item) is Registry.RegistryValue:
-			deleted_values.append(item)
-
-	print('Deleted values (all, may contain reallocated data):')
-	print()
-	for value in deleted_values:
-		print_deleted_value(value)
+	# A truncated dirty hive.
+	hive = Registry.RegistryHiveTruncated(primary)
+	process_truncated_hive(hive)
+else:
+	process_normal_hive(hive)
 
 hive = None
 primary.close()

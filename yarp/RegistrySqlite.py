@@ -2,19 +2,21 @@
 # (c) Maxim Suhanov
 #
 # This module implements an sqlite3 interface with advanced features.
+# Unlike the Registry module, this interface provides a single class to work with a registry hive, a truncated registry hive, and a registry fragment.
 # Python 3 only.
 
 from . import Registry, RegistryFile, RegistryRecover, RegistryHelpers
 import sqlite3
+import os
 from hashlib import sha256
 from collections import namedtuple
 
 Key = namedtuple('Key', [ 'rowid', 'is_deleted', 'name', 'classname', 'last_written_timestamp', 'access_bits', 'parent_key_id' ])
 Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'parent_key_id' ])
-HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated' ])
+HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated', 'rebuilt' ])
 
 class YarpDB(object):
-	"""This is an implementation of a registry hive to an sqlite3 database converter."""
+	"""This is an implementation of a registry hive to an sqlite3 database converter (and a simple interface to the database)."""
 
 	db_cursor = None
 	"""A database cursor."""
@@ -25,7 +27,8 @@ class YarpDB(object):
 					'`last_reorganized_timestamp` TEXT,'
 					'`root_key_id` TEXT,'
 					'`recovered` NUMERIC,'
-					'`truncated` NUMERIC'
+					'`truncated` NUMERIC,'
+					'`rebuilt` NUMERIC'
 					')')
 	"""Schema for the 'hive' table. Timestamps (here and in other places) are integers stored as text (FILETIME). Only one row is allowed in this table."""
 
@@ -51,9 +54,23 @@ class YarpDB(object):
 	"""Schema for the 'values' table."""
 
 	def __init__(self, primary_or_fragment_path, sqlite_path, no_recovery = False):
-		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry hive (or a registry fragment) specified by 'primary_or_fragment_path'.
-		When 'no_recovery' is True, transaction log files are not used to recover a primary file.
+		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry file (primary) or a registry fragment specified by 'primary_or_fragment_path'.
+		An existing database is cleared first. When 'no_recovery' is True, transaction log files are not used to recover a primary file.
+		If 'primary_or_fragment_path' is None, open an existing database and use it.
 		"""
+
+		if primary_or_fragment_path is None and os.path.isfile(sqlite_path):
+			# Use the existing database.
+			self._primary = None
+			self._hive = None
+			self._log = None
+			self._log1 = None
+			self._log2 = None
+
+			self._db_connection = sqlite3.connect(sqlite_path, check_same_thread = False)
+			self.db_cursor = self._db_connection.cursor()
+
+			return
 
 		# Open the database, open the cursor.
 		self._db_connection = sqlite3.connect(sqlite_path, check_same_thread = False)
@@ -89,10 +106,13 @@ class YarpDB(object):
 			temp_obj.close()
 
 			self._is_hive_truncated = True
+			self._is_rebuilt = True
 		except Registry.RegistryException:
 			self._is_hive_truncated = True
+			self._is_rebuilt = False
 		else:
 			self._is_hive_truncated = False
+			self._is_rebuilt = False
 
 		self._recovered = False
 		self._db_clear()
@@ -115,6 +135,7 @@ class YarpDB(object):
 
 				# This is an edge case: a truncated dirty hive.
 				self._is_hive_truncated = True
+				self._is_rebuilt = False
 				self._hive = Registry.RegistryHiveTruncated(self._primary)
 
 				self._db_init()
@@ -149,7 +170,8 @@ class YarpDB(object):
 		self._hive = None
 
 		# Close the primary file.
-		self._primary.close()
+		if self._primary is not None:
+			self._primary.close()
 
 		# Close the transaction log files.
 		if self._log is not None:
@@ -204,8 +226,13 @@ class YarpDB(object):
 		else:
 			truncated = 0
 
-		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`, `truncated`) VALUES (?, ?, ?, ?, ?, ?)',
-			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered, truncated))
+		if self._is_rebuilt:
+			rebuilt = 1
+		else:
+			rebuilt = 0
+
+		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`, `truncated`, `rebuilt`) VALUES (?, ?, ?, ?, ?, ?, ?)',
+			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered, truncated, rebuilt))
 
 		# Set up the value ID counter, etc.
 		self._value_id = 0
@@ -473,7 +500,7 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered`, `truncated` FROM `hive` WHERE `id` = ?', (0,))
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered`, `truncated`, `rebuilt` FROM `hive` WHERE `id` = ?', (0,))
 		results = self.db_cursor.fetchall()
 
 		for result in results:
@@ -482,4 +509,4 @@ class YarpDB(object):
 			else:
 				ts_lr = int(result[1])
 
-			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2], truncated = result[3])
+			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2], truncated = result[3], rebuilt = result[4])

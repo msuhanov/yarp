@@ -97,12 +97,15 @@ class YarpFS(llfuse.Operations):
 
 			do_cache = key.subkeys_count() > CACHE_SUBKEYS_COUNT
 
+			sk_set = set()
 			prev_sk_name = None
 			for subkey in key.subkeys():
 				sk_name = subkey.name()
 
-				if prev_sk_name is not None and sk_name.upper() <= prev_sk_name.upper():
+				if (prev_sk_name is not None and sk_name.upper() <= prev_sk_name.upper()) or sk_name.upper() in sk_set:
 					raise Registry.WalkException('Invalid Unicode characters in names of keys')
+
+				sk_set.add(sk_name.upper())
 
 				if sk_name in v_set:
 					if key.cell_relative_offset in self._yarp_conflicts.keys():

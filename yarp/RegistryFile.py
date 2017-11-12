@@ -1304,9 +1304,6 @@ def FragmentTranslator(file_object, effective_version = 5):
 	The BytesIO object is then returned.
 	"""
 
-	if effective_version not in MINOR_VERSION_NUMBERS_FOR_NEW_CELL_FORMAT:
-		raise NotSupportedException('Minor version not supported: {}'.format(effective_version))
-
 	reg_file = RegistryFile(file_object)
 
 	signature = reg_file.read_binary(0, 4)
@@ -1355,6 +1352,9 @@ def FragmentTranslator(file_object, effective_version = 5):
 		reg_file.write_uint32(pos + 4, pos - BASE_BLOCK_LENGTH_PRIMARY)
 		reg_file.write_uint32(pos + 8, HIVE_BIN_SIZE_ALIGNMENT)
 		reg_file.write_uint32(pos + 32, HIVE_BIN_SIZE_ALIGNMENT - 32)
+
+		if effective_version in MINOR_VERSION_NUMBERS_FOR_OLD_CELL_FORMAT:
+			reg_file.write_uint32(pos + 36, CELL_OFFSET_NIL)
 
 		pos += HIVE_BIN_SIZE_ALIGNMENT
 
