@@ -4,7 +4,7 @@ yarp: yet another registry parser
 
 - Parse Windows registry files in a proper way (with forensics in mind).
 - Expose values of all fields of underlying registry structures.
-- Support for truncated registry files.
+- Support for truncated registry files and registry fragments.
 - Support for recovering deleted keys and values.
 - Support for carving of registry hives.
 - Support for transaction log files.
