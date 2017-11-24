@@ -1,3 +1,11 @@
+Version: 1.0.1
+
+RegistryFile: yield cells in a truncated hive in the sorted order, improve the recovery process.
+yarp-timeline: handle truncated hives and registry fragments.
+yarp-print: clarify the help message, handle registry fragments.
+
+---
+
 Version: 1.0.0
 
 Stable release.

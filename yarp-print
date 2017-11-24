@@ -18,7 +18,7 @@ Arguments = namedtuple('Arguments', [ 'primary_file', 'do_recovery', 'do_deleted
 def parse_args():
 	"""Parse command line arguments and return a named tuple (Arguments)."""
 
-	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Parse a Windows registry file, print all keys and values.', add_help = False, prefix_chars = '-')
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Parse a Windows registry file (possibly a truncated one), print all keys and values.', add_help = False, prefix_chars = '-')
 
 	group_main = parser.add_argument_group('Main arguments')
 	group_opt = parser.add_argument_group('Optional arguments')
@@ -279,8 +279,16 @@ primary = open(args.primary_file, 'rb')
 
 try:
 	hive = Registry.RegistryHive(primary)
-except (RegistryFile.BaseBlockException, RegistryFile.NotSupportedException):
+except RegistryFile.NotSupportedException:
 	raise
+except RegistryFile.BaseBlockException:
+	print('File seems to be a fragment, converting it to a truncated primary file', file = sys.stderr)
+
+	temp_obj = primary
+	primary = RegistryFile.FragmentTranslator(temp_obj)
+	temp_obj.close()
+
+	truncated = True
 except Registry.RegistryException:
 	truncated = True
 else:

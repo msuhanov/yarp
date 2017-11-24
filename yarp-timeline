@@ -13,7 +13,7 @@ import sys
 PROGRAM_NAME = 'yarp-timeline'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'primary_file', 'faster' ])
+Arguments = namedtuple('Arguments', [ 'primary_file', 'faster', 'truncated' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
 
 def parse_args():
@@ -28,6 +28,7 @@ def parse_args():
 	group_main.add_argument('file', help = 'a registry file (primary) to parse')
 
 	group_opt.add_argument('--fast', action = 'store_true', help = 'do not use intermediate states to extend the timeline when applying a transaction log (new format)')
+	group_opt.add_argument('--truncated', action = 'store_true', help = 'treat the registry file (primary) as truncated (this will also ignore transaction log files)')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
 	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
@@ -36,8 +37,9 @@ def parse_args():
 
 	primary_file = parsed_args.file
 	faster = parsed_args.fast
+	truncated = parsed_args.truncated
 
-	return Arguments(primary_file = primary_file, faster = faster)
+	return Arguments(primary_file = primary_file, faster = faster, truncated = truncated)
 
 keys_list = []
 def extend_keys_list(do_deleted = False):
@@ -73,6 +75,24 @@ def extend_keys_list(do_deleted = False):
 				if key_parsed is not None:
 					keys_list.append(key_parsed)
 
+def extend_keys_list_truncated(do_deleted = False):
+	global hive
+	global keys_list
+
+	for item in hive.scan():
+		if type(item) is Registry.RegistryKey:
+			key_parsed = parse_key(item, False)
+			if key_parsed is not None:
+				keys_list.append(key_parsed)
+
+	if do_deleted:
+		scanner = RegistryRecover.Scanner(hive, False)
+		for item in scanner.scan():
+			if type(item) is Registry.RegistryKey:
+				key_parsed = parse_key(item, True)
+				if key_parsed is not None:
+					keys_list.append(key_parsed)
+
 def parse_key(key, is_deleted):
 	try:
 		path_or_name = key.path()
@@ -88,6 +108,17 @@ def parse_key(key, is_deleted):
 		return
 
 	return TimelineEntry(path_or_name = path_or_name, is_deleted = is_deleted, is_path_known = is_path_known, timestamp = timestamp)
+
+def is_hive_obviously_truncated():
+	global hive
+
+	try:
+		for subkey in hive.root_key().subkeys():
+			pass
+	except Registry.RegistryException:
+		return True
+
+	return False
 
 def print_timeline_header():
 	print('Registry file\tKey path/name\tIs deleted\tIs path known\tTimestamp (UTC)')
@@ -109,7 +140,39 @@ if not os.path.isfile(args.primary_file):
 	sys.exit(255)
 
 primary = open(args.primary_file, 'rb')
-hive = Registry.RegistryHive(primary)
+
+try:
+	hive = Registry.RegistryHive(primary)
+except RegistryFile.NotSupportedException:
+	raise
+except RegistryFile.BaseBlockException:
+	print('File seems to be a fragment, converting it to a truncated primary file', file = sys.stderr)
+
+	temp_obj = primary
+	primary = RegistryFile.FragmentTranslator(temp_obj)
+	temp_obj.close()
+
+	is_truncated = True
+except Registry.RegistryException:
+	is_truncated = True
+else:
+	is_truncated = is_hive_obviously_truncated()
+
+if is_truncated and not args.truncated:
+	print('Primary file is truncated, use the "--truncated" switch', file = sys.stderr)
+	sys.exit(1)
+
+if args.truncated:
+	hive = Registry.RegistryHiveTruncated(primary)
+	extend_keys_list_truncated(True)
+
+	keys_list = list(set(keys_list))
+	keys_list.sort(key = lambda x: x.timestamp, reverse = True)
+	print_timeline(args.primary_file)
+
+	hive = None
+	primary.close()
+	sys.exit(0)
 
 extend_keys_list(True) # Extend the list of keys (including deleted ones) for the first time, before applying a transaction log.
 

@@ -1182,17 +1182,20 @@ class PrimaryFile(object):
 		if is_starting_log(sequence_number_1, sequence_number_2):
 			first = log_file_object_1
 			second = log_file_object_2
+			second_baseblock = new_log_file_2.baseblock
 		else:
 			first = log_file_object_2
 			second = log_file_object_1
+			second_baseblock = new_log_file_1.baseblock
 
 		if self.baseblock.is_baseblock_valid:
 			try:
 				self.apply_new_log_file(first, callback)
 			except NotEligibleException:
-				pass
-
-			self.apply_new_log_file(second, callback)
+				self.apply_new_log_file(second, callback)
+			else:
+				if self.last_sequence_number is not None and second_baseblock.get_primary_sequence_number() == c_uint32(self.last_sequence_number + 1).value:
+					self.apply_new_log_file(second, callback)
 		else:
 			self.apply_new_log_file(second, callback) # This is how Windows works.
 
@@ -1290,12 +1293,12 @@ class PrimaryFileTruncated(object):
 	def cells(self, yield_unallocated_cells = False):
 		"""This method yields a HiveCell object for each cell."""
 
-		for cell_file_offset in self.cell_map_allocated:
+		for cell_file_offset in sorted(self.cell_map_allocated):
 			cell = HiveCell(self.file_object, cell_file_offset, self.baseblock.use_old_cell_format)
 			yield cell
 
 		if yield_unallocated_cells:
-			for cell_file_offset in self.cell_map_unallocated:
+			for cell_file_offset in sorted(self.cell_map_unallocated):
 				cell = HiveCell(self.file_object, cell_file_offset, self.baseblock.use_old_cell_format)
 				yield cell
 
