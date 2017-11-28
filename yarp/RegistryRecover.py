@@ -91,7 +91,9 @@ class Scanner(object):
 		return data
 
 	def process_cell(self, cell):
-		"""Scan data of a cell for deleted keys and values, yield them as RegistryKey and RegistryValue objects."""
+		"""Scan data of a cell for deleted keys and values, yield them as RegistryKey and RegistryValue objects.
+		Note: only even offsets will be scanned.
+		"""
 
 		pos = 0
 		while pos < len(cell):
@@ -141,10 +143,10 @@ class Scanner(object):
 
 	def scan(self):
 		"""This method yields RegistryKey objects for deleted keys and RegistryValue objects for deleted values.
-		A hive is required to have the free map built (or nothing will be recovered).
+		A hive is required to have the free map built (or almost nothing will be recovered).
 		"""
 
-		for file_offset in self.hive.registry_file.cell_map_free:
+		for file_offset in sorted(self.hive.registry_file.cell_map_free):
 			cell = self.hive.registry_file.get_cell_naive(file_offset - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY)
 
 			for result in self.process_cell(cell):

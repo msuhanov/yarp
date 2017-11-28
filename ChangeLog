@@ -1,3 +1,10 @@
+Version: 1.0.2
+
+RegistryRecover: yield deleted records from free cells in the sorted order, minor changes.
+RegistryCarve: minor changes.
+
+---
+
 Version: 1.0.1
 
 RegistryFile: yield cells in a truncated hive in the sorted order, improve the recovery process.

@@ -829,6 +829,7 @@ def test_carving(recover_fragments):
 		for i in carver.carve(recover_fragments):
 			assert i.offset == 0
 			assert i.size == 8192
+			assert i.hbins_data_size == 4096
 			assert not i.truncated
 			assert i.truncation_scenario == 0
 
@@ -837,6 +838,7 @@ def test_carving(recover_fragments):
 		for i in carver.carve(recover_fragments):
 			assert i.offset == 512
 			assert i.size == 8192
+			assert i.hbins_data_size == 4096
 			assert not i.truncated
 			assert i.truncation_scenario == 0
 
@@ -867,6 +869,7 @@ def test_carving(recover_fragments):
 				assert type(i) is RegistryCarve.CarveResult
 				assert i.offset == 512
 				assert i.size == 147456
+				assert i.hbins_data_size == 143360
 				assert not i.truncated
 				assert i.truncation_scenario == 0
 			elif c == 2:

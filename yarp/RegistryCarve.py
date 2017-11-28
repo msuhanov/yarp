@@ -11,7 +11,7 @@ from io import BytesIO
 from struct import unpack
 from collections import namedtuple
 
-CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
+CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'hbins_data_size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
 CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start' ])
 
 CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
@@ -23,9 +23,9 @@ CellsCheckResult = namedtuple('CellsCheckResult', [ 'are_valid', 'truncation_poi
 
 SECTOR_SIZE = 512 # This is an assumed sector size.
 FILE_MARGIN_SIZE = 4*1024*1024 # We will read more bytes than specified in the base block to account possible damage scenarios.
-FILE_SIZE_MAX_MIB = 500 # We do not expect primary files to be larger than this (in MiB).
-CELL_SIZE_MAX = 2*1024*1024 # We do not expect cells to be larger than this.
-HBIN_SIZE_MAX = 64*1024*1024 # We do not expect hive bins to be larger than this.
+FILE_SIZE_MAX_MIB = 500 # We do not expect a primary file to be larger than this (in MiB).
+CELL_SIZE_MAX = 2*1024*1024 # We do not expect a cell to be larger than this.
+HBIN_SIZE_MAX = 64*1024*1024 # We do not expect a hive bin to be larger than this.
 
 def CheckBaseBlockOfPrimaryFile(Buffer):
 	"""Check if Buffer contains a valid base block of a primary file and a hive bin, return a named tuple (BaseBlockCheckResult)."""
@@ -137,6 +137,7 @@ def ValidateRandomFragment(Buffer, AllowNullBytesOnly):
 	for c in Buffer:
 		if c != 0 and c != b'\x00':
 			null_bytes_only = False
+			break
 
 	if null_bytes_only and AllowNullBytesOnly:
 		return True
@@ -190,6 +191,7 @@ class Carver(DiskImage):
 				if check_result.is_valid:
 					regf_offset = pos
 					regf_size = RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + check_result.hbins_data_size
+					regf_hbins_data_size = check_result.hbins_data_size
 					regf_buf = self.read(regf_offset, regf_size + FILE_MARGIN_SIZE)
 
 					curr_pos_relative = RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
@@ -228,31 +230,31 @@ class Carver(DiskImage):
 						check_result_cells = CheckCellsOfHiveBin(last_hbin_buf, check_result.old_cells)
 						if check_result_cells.are_valid:
 							# No truncation.
-							yield CarveResult(offset = regf_offset, size = regf_size, truncated = False, truncation_point = None, truncation_scenario = 0,
-								filename = check_result.filename)
+							yield CarveResult(offset = regf_offset, size = regf_size, hbins_data_size = regf_hbins_data_size, truncated = False, truncation_point = None,
+								truncation_scenario = 0, filename = check_result.filename)
 						else:
 							# Truncation within the last hive bin.
 							truncation_point = regf_offset + regf_size - len(last_hbin_buf) + check_result_cells.truncation_point_relative
 							truncation_point = truncation_point // SECTOR_SIZE * SECTOR_SIZE # Adjust the truncation point according to the sector size.
 							regf_size = truncation_point - regf_offset # Adjust the file size according to the truncation point.
 
-							yield CarveResult(offset = regf_offset, size = regf_size, truncated = True, truncation_point = truncation_point, truncation_scenario = 2,
-								filename = check_result.filename)
+							yield CarveResult(offset = regf_offset, size = regf_size, hbins_data_size = regf_hbins_data_size, truncated = True, truncation_point = truncation_point,
+								truncation_scenario = 2, filename = check_result.filename)
 					else:
 						# Obvious truncation.
 						check_result_cells = CheckCellsOfHiveBin(last_hbin_buf, check_result.old_cells)
 						if check_result_cells.are_valid:
 							# Truncation at a boundary of a hive bin.
-							yield CarveResult(offset = regf_offset, size = regf_size, truncated = True, truncation_point = truncation_point, truncation_scenario = 1,
-								filename = check_result.filename)
+							yield CarveResult(offset = regf_offset, size = regf_size, hbins_data_size = regf_hbins_data_size, truncated = True, truncation_point = truncation_point,
+								truncation_scenario = 1, filename = check_result.filename)
 						else:
 							# Truncation within a hive bin.
 							truncation_point = regf_offset + regf_size - len(last_hbin_buf) + check_result_cells.truncation_point_relative
 							truncation_point = truncation_point // SECTOR_SIZE * SECTOR_SIZE # Adjust the truncation point according to the sector size.
 							regf_size = truncation_point - regf_offset # Adjust the file size according to the truncation point.
 
-							yield CarveResult(offset = regf_offset, size = regf_size, truncated = True, truncation_point = truncation_point, truncation_scenario = 3,
-								filename = check_result.filename)
+							yield CarveResult(offset = regf_offset, size = regf_size, hbins_data_size = regf_hbins_data_size, truncated = True, truncation_point = truncation_point,
+								truncation_scenario = 3, filename = check_result.filename)
 
 					if regf_size % SECTOR_SIZE == 0:
 						pos += regf_size
@@ -384,6 +386,7 @@ class Carver(DiskImage):
 
 				elif recover_fragments and RegistryHelpers.NTFSCheckCompressedSignature(seven_bytes, b'hbin'):
 					if pos not in compressed_regf_fragments:
+						# Not a known fragment of a compressed primary file.
 						buf_compressed = self.read(pos, RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE)
 						buf_decompressed = RegistryHelpers.NTFSDecompressUnit(buf_compressed)
 
