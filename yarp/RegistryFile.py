@@ -589,11 +589,18 @@ class HiveCell(RegistryFile):
 
 		self.use_old_cell_format = use_old_cell_format
 
-		cell_absolute_size = self.get_absolute_size()
+		try:
+			cell_absolute_size = self.get_absolute_size()
+		except ReadException:
+			cell_absolute_size = None
+
 		if not self.use_old_cell_format:
 			cell_alignment = 8
 		else:
 			cell_alignment = 16
+
+		if cell_absolute_size is None:
+			raise HiveCellException('Unknown cell size')
 
 		if cell_absolute_size < cell_alignment or cell_absolute_size % cell_alignment != 0:
 			raise HiveCellException('Invalid cell size (absolute): {}'.format(cell_absolute_size))

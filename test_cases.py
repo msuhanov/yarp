@@ -86,6 +86,8 @@ hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
 fragment_sqlite = path.join(HIVES_DIR, 'SqliteFragment')
 fragment_sqlite_db = path.join(HIVES_DIR, 'SqliteFragment.sqlite')
 
+truncated_hbin = path.join(HIVES_DIR, 'TruncatedHiveBin')
+
 log_discovery = [
 	path.join(HIVES_DIR, 'Discovery', '1', 'aa'),
 	path.join(HIVES_DIR, 'Discovery', '2', 'AA'),
@@ -1833,3 +1835,18 @@ def test_sqlite():
 
 		for i in h.values_deleted():
 			pass
+
+def test_translator():
+	with open(truncated_hbin, 'rb') as src_obj:
+		hive_obj = RegistryFile.FragmentTranslator(src_obj)
+
+		hive = Registry.RegistryHiveTruncated(hive_obj)
+
+		c = 0
+		for key in hive.scan():
+			assert type(key) is Registry.RegistryKey
+			assert key.name() == '{6214ff27-7b1b-41a3-9ae4-5fb851ffed63}' or key.name() == 'key_with_many_subkeys'
+
+			c += 1
+
+		assert c == 2
