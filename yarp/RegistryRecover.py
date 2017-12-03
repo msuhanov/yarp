@@ -147,7 +147,10 @@ class Scanner(object):
 		"""
 
 		for file_offset in sorted(self.hive.registry_file.cell_map_free):
-			cell = self.hive.registry_file.get_cell_naive(file_offset - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY)
+			try:
+				cell = self.hive.registry_file.get_cell_naive(file_offset - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY)
+			except Registry.RegistryException:
+				continue
 
 			for result in self.process_cell(cell):
 				yield result

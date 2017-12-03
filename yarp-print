@@ -327,7 +327,7 @@ if args.do_recovery:
 
 try:
 	hive.walk_everywhere()
-except RegistryFile.CellOffsetException:
+except (RegistryFile.CellOffsetException, RegistryFile.ReadException):
 	if args.do_recovery and recovered:
 		raise
 

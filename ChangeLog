@@ -1,3 +1,9 @@
+Version: 1.0.4
+
+yarp-print, RegistrySqlite: improve the processing of cells in a truncated hive bin (when parsing a truncated hive).
+
+---
+
 Version: 1.0.3
 
 RegistryFile: improve the processing of cells in a truncated hive bin (when parsing a truncated hive).

@@ -129,7 +129,7 @@ class YarpDB(object):
 
 			try:
 				self._hive.walk_everywhere()
-			except RegistryFile.CellOffsetException:
+			except (RegistryFile.CellOffsetException, RegistryFile.ReadException):
 				if self._recovered:
 					raise
 
