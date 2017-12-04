@@ -313,7 +313,7 @@ class Carver(DiskImage):
 				# A compression unit may contain data belonging to another file in the slack space. Even a new compression unit may be in the slack space.
 				# Here, the slack space is an area from the end of compressed clusters to the end of a corresponding compression unit.
 				# Thus, we cannot skip over a processed compression unit without scanning the slack space.
-				# Sometimes there is no slack space after compressed clusters on a disk (and a new compression unit starts immediately).
+				# Sometimes there is no slack space after compressed clusters on a disk (and a new compression unit for the same file starts immediately).
 				# We also track offsets of compressed units belonging to primary files, so we will not report their hive bins as fragments later.
 
 				seven_bytes = buf[ : 7]
@@ -373,8 +373,10 @@ class Carver(DiskImage):
 									result_2 = CarveResultCompressed(offset = regf_offset, buffer_decompressed = regf_buf, filename = check_result.filename)
 
 					if result_1 is not None and result_2 is None:
+						compressed_regf_fragments.extend(regf_fragments[True])
 						yield result_1
 					elif result_2 is not None and result_1 is None:
+						compressed_regf_fragments.extend(regf_fragments[False])
 						yield result_2
 					elif result_1 is not None and result_2 is not None:
 						if len(result_1.buffer_decompressed) > len(result_2.buffer_decompressed):

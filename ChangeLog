@@ -1,6 +1,13 @@
+Version: 1.0.5
+
+RegistryCarve: improve the tracking of compressed hive bins from primary files when dealing with registry fragments.
+Minor changes.
+
+---
+
 Version: 1.0.4
 
-yarp-print, RegistrySqlite: improve the processing of cells in a truncated hive bin (resolve the ReadException bug).
+yarp-print, RegistrySqlite, RegistryRecover: improve the processing of cells in a truncated hive bin (resolve the ReadException bug).
 
 ---
 
