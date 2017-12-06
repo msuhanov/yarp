@@ -1,3 +1,11 @@
+Version: 1.0.6
+
+Registry, RegistrySqlite: handle an invalid reference to a parent key when parsing a truncated hive.
+RegistrySqlite: rename the 'values_deleted' method (YarpDB) to 'values_unassociated', clarify the docstring.
+Minor changes.
+
+---
+
 Version: 1.0.5
 
 RegistryCarve: improve the tracking of compressed hive bins from primary files when dealing with registry fragments.

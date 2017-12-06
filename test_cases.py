@@ -62,6 +62,7 @@ hive_wrong_order = path.join(HIVES_DIR, 'WrongOrderHive')
 hive_truncated_name = path.join(HIVES_DIR, 'TruncatedNameHive')
 hive_healed = path.join(HIVES_DIR, 'HealedHive')
 hive_deleted_data = path.join(HIVES_DIR, 'DeletedDataHive')
+hive_deleted_data_truncated = path.join(HIVES_DIR, 'DeletedDataHiveTruncated')
 hive_deleted_tree = path.join(HIVES_DIR, 'DeletedTreeHive')
 hive_comp = path.join(HIVES_DIR, 'CompHive')
 hive_remnants = path.join(HIVES_DIR, 'RemnantsHive')
@@ -85,6 +86,7 @@ hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
 
 fragment_sqlite = path.join(HIVES_DIR, 'SqliteFragment')
 fragment_sqlite_db = path.join(HIVES_DIR, 'SqliteFragment.sqlite')
+fragment_invalid_parent = path.join(HIVES_DIR, 'InvalidParentFragment')
 
 truncated_hbin = path.join(HIVES_DIR, 'TruncatedHiveBin')
 
@@ -1451,7 +1453,7 @@ def test_sqlite():
 		assert c == 0
 
 		c = 0
-		for value in h.values_deleted():
+		for value in h.values_unassociated():
 			c += 1
 
 			assert value.is_deleted
@@ -1509,7 +1511,7 @@ def test_sqlite():
 		assert c == 1
 
 		c = 0
-		for value in h.values_deleted():
+		for value in h.values_unassociated():
 			c += 1
 
 		assert c == 0
@@ -1600,7 +1602,7 @@ def test_sqlite():
 		assert c == 2
 
 		c = 0
-		for value in h.values_deleted():
+		for value in h.values_unassociated():
 			c += 1
 
 			assert value.name == ''
@@ -1718,7 +1720,7 @@ def test_sqlite():
 		assert c == 2
 
 		c = 0
-		for value in h.values_deleted():
+		for value in h.values_unassociated():
 			c += 1
 
 			assert value.name == ''
@@ -1762,6 +1764,52 @@ def test_sqlite():
 			assert h.get_rowid(subkey.parent_key_id) == root.rowid
 
 		assert c == 2
+
+	with RegistrySqlite.YarpDB(fragment_invalid_parent, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 1
+		assert h.info().rebuilt == 1
+		assert h.root_key() is None
+
+		c = 0
+		for subkey in h.subkeys_unassociated():
+			c += 1
+
+			assert subkey.name == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+			assert subkey.access_bits == 0
+			assert subkey.classname is None
+			assert not subkey.is_deleted
+
+		assert c == 1
+
+	with RegistrySqlite.YarpDB(hive_deleted_data, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
+
+		c = 0
+		for value in h.values_unassociated():
+			c += 1
+
+			assert value.is_deleted
+			assert value.name == 'v' or value.name == 'v2'
+			assert value.type == 1
+
+		assert c == 2
+
+	with RegistrySqlite.YarpDB(hive_deleted_data_truncated, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 1
+		assert h.info().rebuilt == 0
+
+		c = 0
+		for value in h.values_unassociated():
+			c += 1
+
+			assert (value.is_deleted and (value.name == 'v' or value.name == 'v2')) or ((not value.is_deleted) and value.name == 'v1')
+			assert value.type == 1
+
+		assert c == 3
 
 	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h:
 		assert h.info().recovered == 0
@@ -1833,7 +1881,7 @@ def test_sqlite():
 		for i in h.subkeys_unassociated():
 			process_rowid(i.rowid)
 
-		for i in h.values_deleted():
+		for i in h.values_unassociated():
 			pass
 
 def test_translator():
@@ -1850,3 +1898,19 @@ def test_translator():
 			c += 1
 
 		assert c == 2
+
+def test_invalid_parent_fragment():
+	with open(fragment_invalid_parent, 'rb') as f:
+		hive_obj = RegistryFile.FragmentTranslator(f)
+
+		hive = Registry.RegistryHiveTruncated(hive_obj)
+
+		c = 0
+		for key in hive.scan():
+			assert type(key) is Registry.RegistryKey
+			assert key.name() == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+			assert key.path_partial() == '{dedef10d-30ff-45b5-9d44-b3fa249ecd49}'
+
+			c += 1
+
+		assert c == 1

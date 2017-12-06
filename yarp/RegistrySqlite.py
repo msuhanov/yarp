@@ -317,6 +317,9 @@ class YarpDB(object):
 					parent_key_status = 1
 
 				parent_key_id = self._db_key_to_id(parent_key, parent_key_status)
+
+				if parent_key_id == key_id: # Invalid parent key.
+					parent_key_id = None
 			else:
 				# This is the root key.
 				parent_key_id = None
@@ -431,7 +434,7 @@ class YarpDB(object):
 				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
 
 	def subkeys_unassociated(self):
-		"""Get and yield unassociated subkeys."""
+		"""Get and yield unassociated (unlinked) subkeys."""
 
 		root_key = self.root_key()
 		if root_key is not None:
@@ -471,8 +474,11 @@ class YarpDB(object):
 			for result in results:
 				yield Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
-	def values_deleted(self):
-		"""Get and yield all deleted values."""
+	def values_unassociated(self):
+		"""Get and yield all unassociated values. For normal hives, this will yield all deleted values; for truncated hives, this will yield all values.
+		Note: unlike unassociated subkeys, unassociated values may be referenced by existing keys (here, the word 'unassociated' means that values were extracted without parsing keys).
+		This method will yield unlinked instances of unassociated values.
+		"""
 
 		self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` IS NULL ORDER BY UPPER(`name`) ASC')
 		results = self.db_cursor.fetchall()

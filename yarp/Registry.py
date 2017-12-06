@@ -323,7 +323,7 @@ class RegistryKey(object):
 	"""A set of data strings from different slack space locations to be used in the deleted data recovery."""
 
 	def __init__(self, primary_file, buf, layer, cell_relative_offset, tolerate_minor_errors = False, naive = False):
-		"""When working with deleted registry keys, set 'naive' to True, 'cell_relative_offset' and 'layer' to None.
+		"""When working with deleted registry keys or truncated hives, set 'naive' to True, 'cell_relative_offset' and 'layer' to None.
 		For a root key, set 'layer' to 0 (increment 'layer' by one when going to subkeys of a current key and decrement it by one when going to a parent key).
 		"""
 
@@ -749,7 +749,7 @@ class RegistryValue(object):
 	"""A KeyValue object."""
 
 	def __init__(self, primary_file, buf, naive = False):
-		"""When working with deleted registry values, set 'naive' to True."""
+		"""When working with deleted registry values or truncated hives, set 'naive' to True."""
 
 		self.registry_file = primary_file
 		if not naive:
@@ -950,7 +950,7 @@ class RegistryHiveTruncated(object):
 
 			if len(cell_data) > 76: # A key node with at least one character in the name.
 				try:
-					key = RegistryKey(self.registry_file, cell_data, None, None, True, False)
+					key = RegistryKey(self.registry_file, cell_data, None, None, True, True)
 					key_name = key.name()
 				except (RegistryException, UnicodeDecodeError):
 					pass
@@ -960,7 +960,7 @@ class RegistryHiveTruncated(object):
 
 			if len(cell_data) >= 20: # A key value with no name (at least).
 				try:
-					value = RegistryValue(self.registry_file, cell_data, False)
+					value = RegistryValue(self.registry_file, cell_data, True)
 					value_name = value.name()
 				except (RegistryException, UnicodeDecodeError):
 					pass
