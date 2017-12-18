@@ -12,7 +12,7 @@ import sys
 PROGRAM_NAME = 'yarp-carver'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction' ])
 
 def parse_args():
 	"""Parse command line arguments and return a named tuple (Arguments)."""
@@ -20,10 +20,13 @@ def parse_args():
 	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry files and fragments from a disk image (or a similar source).', add_help = False, prefix_chars = '-')
 
 	group_main = parser.add_argument_group('Main arguments')
+	group_opt = parser.add_argument_group('Optional arguments')
 	group_misc = parser.add_argument_group('Miscellaneous arguments')
 
 	group_main.add_argument('file', help = 'a disk image')
 	group_main.add_argument('outdir', help = 'an output directory')
+
+	group_opt.add_argument('--no-reconstruction', action = 'store_true', help = 'do not reconstruct fragmented hives')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
 	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
@@ -32,8 +35,9 @@ def parse_args():
 
 	source_file = parsed_args.file
 	output_dir = parsed_args.outdir
+	no_reconstruction = parsed_args.no_reconstruction
 
-	return Arguments(source_file = source_file, output_dir = output_dir)
+	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction)
 
 def make_sane_filename(filename):
 	for bad_char in [ '\x00', '/', '\\', ':' ]:
@@ -132,24 +136,26 @@ for carve_result in carver.carve(True, True):
 
 		results.append(carve_result)
 
-print('', file = sys.stderr)
-print('Reconstructing fragmented hives: ', end = '', file = sys.stderr)
-sys.stderr.flush()
+if not args.no_reconstruction:
+	print('', file = sys.stderr)
+	print('Reconstructing fragmented hives', end = '', file = sys.stderr)
+	sys.stderr.flush()
 
-reconstructor = RegistryCarve.HiveReconstructor(f)
-reconstructor.set_fragments(results)
-reconstructor.progress_callback = print_progress_reconstruction
-for carve_result, hive_buf in reconstructor.reconstruct_fragmented():
-	regf_filename = carve_result.filename
-	if regf_filename.rfind('\\') != -1:
-		regf_filename = regf_filename.split('\\')[-1]
-	regf_filename = make_sane_filename(regf_filename)
+	reconstructor = RegistryCarve.HiveReconstructor(f)
+	reconstructor.set_fragments(results)
+	reconstructor.progress_callback = print_progress_reconstruction
+	for carve_result, hive_buf in reconstructor.reconstruct_fragmented():
+		regf_filename = carve_result.filename
+		if regf_filename.rfind('\\') != -1:
+			regf_filename = regf_filename.split('\\')[-1]
+		regf_filename = make_sane_filename(regf_filename)
 
-	output_filename = '{}_{}-reconstructed'.format(carve_result.offset, regf_filename)
-	output_file = os.path.join(args.output_dir, output_filename)
+		output_filename = '{}_{}-reconstructed'.format(carve_result.offset, regf_filename)
+		output_file = os.path.join(args.output_dir, output_filename)
 
-	with open(output_file, 'wb') as out_f:
-		out_f.write(hive_buf)
+		with open(output_file, 'wb') as out_f:
+			out_f.write(hive_buf)
 
-print('', file = sys.stderr)
+	print('', file = sys.stderr)
+
 f.close()

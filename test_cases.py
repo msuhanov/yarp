@@ -2013,4 +2013,3 @@ def test_biandquadfragmented():
 			assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f' or h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
 
 		assert c == 2
-
