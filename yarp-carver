@@ -44,6 +44,13 @@ def make_sane_filename(filename):
 
 	return filename
 
+def print_progress_carving(bytes_read, bytes_total):
+	print('Bytes read / Bytes total: {} / {}'.format(bytes_read, bytes_total), file = sys.stderr)
+
+def print_progress_reconstruction():
+	print('.', end = '', file = sys.stderr)
+	sys.stderr.flush()
+
 args = parse_args()
 
 if not os.path.isdir(args.output_dir):
@@ -57,6 +64,10 @@ except (OSError, IOError):
 	sys.exit(255)
 
 carver = RegistryCarve.Carver(f)
+carver.progress_callback = print_progress_carving
+
+results = []
+
 print('Offset\tSize\tTruncated\tFile name or comment')
 for carve_result in carver.carve(True, True):
 	if type(carve_result) is RegistryCarve.CarveResult:
@@ -79,6 +90,8 @@ for carve_result in carver.carve(True, True):
 			buf = f.read(carve_result.size)
 			out_f.write(buf)
 
+		results.append(carve_result)
+
 	elif type(carve_result) is RegistryCarve.CarveResultFragment:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<hive fragment>'))
 
@@ -90,6 +103,8 @@ for carve_result in carver.carve(True, True):
 			buf = f.read(carve_result.size)
 			out_f.write(buf)
 
+		results.append(carve_result)
+
 	elif type(carve_result) is RegistryCarve.CarveResultCompressed:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer_decompressed), 'Unknown', carve_result.filename))
 
@@ -99,11 +114,12 @@ for carve_result in carver.carve(True, True):
 		regf_filename = make_sane_filename(regf_filename)
 
 		output_filename = '{}_{}-compressed'.format(carve_result.offset, regf_filename)
-
 		output_file = os.path.join(args.output_dir, output_filename)
 
 		with open(output_file, 'wb') as out_f:
 			out_f.write(carve_result.buffer_decompressed)
+
+		results.append(carve_result)
 
 	elif type(carve_result) is RegistryCarve.CarveResultFragmentCompressed:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer_decompressed), True, '<hive fragment>'))
@@ -114,4 +130,26 @@ for carve_result in carver.carve(True, True):
 		with open(output_file, 'wb') as out_f:
 			out_f.write(carve_result.buffer_decompressed)
 
+		results.append(carve_result)
+
+print('', file = sys.stderr)
+print('Reconstructing fragmented hives: ', end = '', file = sys.stderr)
+sys.stderr.flush()
+
+reconstructor = RegistryCarve.HiveReconstructor(f)
+reconstructor.set_fragments(results)
+reconstructor.progress_callback = print_progress_reconstruction
+for carve_result, hive_buf in reconstructor.reconstruct_fragmented():
+	regf_filename = carve_result.filename
+	if regf_filename.rfind('\\') != -1:
+		regf_filename = regf_filename.split('\\')[-1]
+	regf_filename = make_sane_filename(regf_filename)
+
+	output_filename = '{}_{}-reconstructed'.format(carve_result.offset, regf_filename)
+	output_file = os.path.join(args.output_dir, output_filename)
+
+	with open(output_file, 'wb') as out_f:
+		out_f.write(hive_buf)
+
+print('', file = sys.stderr)
 f.close()

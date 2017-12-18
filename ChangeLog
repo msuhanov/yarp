@@ -1,3 +1,10 @@
+Version: 1.0.7
+
+RegistryCarve: add the HiveReconstructor class to carve and reconstruct fragmented hives, add the progress callbacks.
+yarp-carver: reconstruct fragmented hives, print the current progress.
+
+---
+
 Version: 1.0.6
 
 Registry, RegistrySqlite: handle an invalid reference to a parent key when parsing a truncated hive.

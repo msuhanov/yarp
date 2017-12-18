@@ -5,9 +5,10 @@
 
 from __future__ import unicode_literals
 
-from . import RegistryFile, RegistryHelpers
+from . import Registry, RegistryFile, RegistryHelpers
 from .Registry import DecodeUnicode
 from io import BytesIO
+import pickle
 from struct import unpack
 from collections import namedtuple
 
@@ -26,6 +27,15 @@ FILE_MARGIN_SIZE = 4*1024*1024 # We will read more bytes than specified in the b
 FILE_SIZE_MAX_MIB = 500 # We do not expect a primary file to be larger than this (in MiB).
 CELL_SIZE_MAX = 2*1024*1024 # We do not expect a cell to be larger than this.
 HBIN_SIZE_MAX = 64*1024*1024 # We do not expect a hive bin to be larger than this.
+
+class ValidationException(Registry.RegistryException):
+	"""This exception is raised when a reconstructed hive is invalid."""
+
+	def __init__(self, value):
+		self._value = value
+
+	def __str__(self):
+		return repr(self._value)
 
 def CheckBaseBlockOfPrimaryFile(Buffer):
 	"""Check if Buffer contains a valid base block of a primary file and a hive bin, return a named tuple (BaseBlockCheckResult)."""
@@ -161,8 +171,24 @@ class DiskImage(object):
 class Carver(DiskImage):
 	"""This class is used to carve registry files (primary) and registry fragments from a disk image."""
 
+	progress_callback = None
+	"""A progress callback. Arguments: bytes_read, bytes_total."""
+
 	def __init__(self, file_object):
 		super(Carver, self).__init__(file_object)
+
+		self.callback_threshold = 2*1024*1024*1024 # In bytes.
+
+	def call_progress_callback(self, bytes_read, bytes_total):
+		"""Call the progress callback, if defined."""
+
+		if self.progress_callback is None:
+			return
+
+		if bytes_read < self.callback_threshold or bytes_read % self.callback_threshold != 0:
+			return
+
+		self.progress_callback(bytes_read, bytes_total)
 
 	def carve(self, recover_fragments = False, ntfs_decompression = False):
 		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment).
@@ -179,6 +205,8 @@ class Carver(DiskImage):
 		pos = 0
 		file_size = self.size()
 		while pos < file_size:
+			self.call_progress_callback(pos, file_size)
+
 			buf_size = RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT
 			buf = self.read(pos, buf_size)
 
@@ -403,3 +431,390 @@ class Carver(DiskImage):
 									hbin_start = check_result_hbin.offset_relative)
 
 			pos += SECTOR_SIZE
+
+class HiveReconstructor(object):
+	"""This class is used to carve registry files (primary), registry fragments from a disk image, and then to reassemble each of them into a single file (the reconstruction process).
+	Compressed (NTFS) registry files (primary), registry fragments are not supported.
+	"""
+
+	regf_fragments = None
+	"""Current metadata about truncated primary files (a list of CarveResult objects)."""
+
+	hbin_fragments = None
+	"""Current metadata about registry fragments (a list of CarveResultFragment objects)."""
+
+	progress_callback = None
+	"""A progress callback (called after a truncated primary file has been processed). No arguments."""
+
+	def __init__(self, file_object):
+		self.file_object = file_object
+		self.carver = Carver(self.file_object)
+
+		self.regf_fragments = []
+		self.hbin_fragments = []
+
+		self.unreferenced_limit = 5
+		"""It is okay for a hive to have this number of unreferenced allocated cells (or less)."""
+
+		self.unreferenced_fraction = 10
+		"""It is okay for a hive to have the following number of unreferenced allocated cells (at most): len(hive.registry_file.cell_map_free) // self.unreferenced_fraction."""
+
+	def call_progress_callback(self):
+		"""Call the progress callback, if defined."""
+
+		if self.progress_callback is None:
+			return
+
+		self.progress_callback()
+
+	def read_safe(self, size):
+		"""Read a specified number of bytes from a disk image at the current position (offset)."""
+
+		buf = self.file_object.read(size)
+
+		if size > 0 and size % 512 == 0 and len(buf) > 0 and len(buf) % 512 != 0:
+			raise IOError('Invalid number of bytes returned by the read() method')
+
+		return buf
+
+	def find_fragments(self):
+		"""Carve fragments (including truncated primary files) from a disk image, return the number of truncated primary files found."""
+
+		self.regf_fragments = []
+		self.hbin_fragments = []
+
+		for i in self.carver.carve(True, False):
+			if type(i) is CarveResult:
+				if i.truncated:
+					self.regf_fragments.append(i)
+			else:
+				self.hbin_fragments.append(i)
+
+		return len(self.regf_fragments)
+
+	def save_fragments(self, file_path):
+		"""Save the current metadata about fragments (including truncated primary files) to a file (using the 'pickle' module)."""
+
+		with open(file_path, 'wb') as f:
+			pickle.dump((self.regf_fragments, self.hbin_fragments), f)
+
+	def load_fragments(self, file_path):
+		"""Load the metadata about fragments (including truncated primary files) from a file (using the 'pickle' module), return the number of truncated primary files loaded."""
+
+		with open(file_path, 'rb') as f:
+			self.regf_fragments, self.hbin_fragments = pickle.load(f)
+
+		return len(self.regf_fragments)
+
+	def set_fragments(self, fragments_list):
+		"""Load the metadata about fragments (including truncated primary files) from an existing list, return the number of truncated primary files loaded."""
+
+		self.regf_fragments = []
+		self.hbin_fragments = []
+
+		for i in fragments_list:
+			if type(i) is CarveResult:
+				if i.truncated:
+					self.regf_fragments.append(i)
+			elif type(i) is CarveResultFragment:
+				self.hbin_fragments.append(i)
+
+		return len(self.regf_fragments)
+
+	def validate_reconstructed_hive(self, primary_object):
+		"""Check if a reconstructed hive looks valid. If not, an exception is raised."""
+
+		hive = Registry.RegistryHive(primary_object)
+		hive.walk_everywhere()
+
+		unref_count = len(hive.registry_file.cell_map_free - hive.registry_file.cell_map_unallocated)
+		if unref_count > self.unreferenced_limit and unref_count > (len(hive.registry_file.cell_map_free) // self.unreferenced_fraction):
+			raise ValidationException('Too many unreferenced allocated cells')
+
+		file_size_expected = hive.registry_file.baseblock.effective_hbins_data_size + RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+
+		primary_object.seek(0, 2)
+		file_size_real = primary_object.tell()
+
+		if file_size_real > 1024*1024 and file_size_real > 2 * file_size_expected:
+			raise ValidationException('File is too large')
+
+	def reconstruct_bifragmented(self):
+		"""Try to reconstruct primary files using two fragments for each primary file."""
+
+		for first_fragment in self.regf_fragments[:]:
+			self.call_progress_callback()
+
+			hbins_data_size_first = first_fragment.size - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+			hbins_data_size_second = first_fragment.hbins_data_size - hbins_data_size_first
+
+			self.file_object.seek(first_fragment.offset)
+			primary_buf = self.read_safe(first_fragment.size)
+			if len(primary_buf) < first_fragment.size: # The truncation point is beyond the end of the image.
+				hbins_data_size_first = len(primary_buf) - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+				hbins_data_size_second = first_fragment.hbins_data_size - hbins_data_size_first
+
+			if len(primary_buf) < RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT: # The first fragment is too small.
+				continue
+
+			primary_obj = BytesIO(primary_buf)
+
+			primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+			for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first fragment.
+				pass
+
+			second_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - hbins_data_size_first
+			if second_fragment_margin < 0:
+				second_fragment_margin = 0
+
+			second_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+			for second_fragment in self.hbin_fragments[:]:
+				if second_fragment.hbin_start == second_hbin_start and second_fragment.size + second_fragment_margin >= hbins_data_size_second:
+					if second_fragment.offset - second_fragment_margin >= 0:
+						self.file_object.seek(second_fragment.offset - second_fragment_margin)
+						fragment_buf = self.read_safe(second_fragment.size + second_fragment_margin)
+					else:
+						continue
+
+					primary_obj.seek(len(primary_buf))
+					primary_obj.write(fragment_buf)
+
+					# Validate the hive.
+					try:
+						self.validate_reconstructed_hive(primary_obj)
+					except Registry.RegistryException:
+						# The hive is invalid, remove the second fragment.
+						primary_obj.truncate(len(primary_buf))
+					else:
+						# The hive is valid.
+						self.regf_fragments.remove(first_fragment)
+						self.hbin_fragments.remove(second_fragment)
+
+						yield (first_fragment, primary_obj.getvalue())
+						break
+
+			primary_obj.close()
+
+	def reconstruct_trifragmented(self):
+		"""Try to reconstruct primary files using three fragments for each primary file."""
+
+		for first_fragment in self.regf_fragments[:]:
+			self.call_progress_callback()
+
+			fragment_done = False
+
+			hbins_data_size_first = first_fragment.size - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+			hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			self.file_object.seek(first_fragment.offset)
+			primary_buf = self.read_safe(first_fragment.size)
+			if len(primary_buf) < first_fragment.size: # The truncation point is beyond the end of the image.
+				hbins_data_size_first = len(primary_buf) - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+				hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			if len(primary_buf) < RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT: # The first fragment is too small.
+				continue
+
+			primary_obj = BytesIO(primary_buf)
+
+			primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+			for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first fragment.
+				pass
+
+			second_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - hbins_data_size_first
+			if second_fragment_margin < 0:
+				second_fragment_margin = 0
+
+			second_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+			for second_fragment in self.hbin_fragments[:]:
+				if second_fragment.hbin_start == second_hbin_start and second_fragment.size + second_fragment_margin < hbins_data_size_remaining:
+					if second_fragment.offset - second_fragment_margin >= 0:
+						self.file_object.seek(second_fragment.offset - second_fragment_margin)
+						fragment_buf_2 = self.read_safe(second_fragment.size + second_fragment_margin)
+					else:
+						continue
+
+					primary_obj.seek(len(primary_buf))
+					primary_obj.write(fragment_buf_2)
+
+					hbins_data_size_remaining_2 = hbins_data_size_remaining - len(fragment_buf_2)
+
+					primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+					for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first two fragments.
+						pass
+
+					third_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - (hbins_data_size_first + len(fragment_buf_2))
+					if third_fragment_margin < 0:
+						third_fragment_margin = 0
+
+					third_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+					for third_fragment in self.hbin_fragments[:]:
+						if third_fragment.hbin_start == third_hbin_start and third_fragment.size + third_fragment_margin >= hbins_data_size_remaining_2:
+							if third_fragment.offset - third_fragment_margin >= 0:
+								self.file_object.seek(third_fragment.offset - third_fragment_margin)
+								fragment_buf_3 = self.read_safe(third_fragment.size + third_fragment_margin)
+							else:
+								continue
+
+							primary_obj.seek(len(primary_buf) + len(fragment_buf_2))
+							primary_obj.write(fragment_buf_3)
+
+							# Validate the hive.
+							try:
+								self.validate_reconstructed_hive(primary_obj)
+							except Registry.RegistryException:
+								# The hive is invalid, remove the third fragment.
+								primary_obj.truncate(len(primary_buf) + len(fragment_buf_2))
+							else:
+								# The hive is valid.
+								self.regf_fragments.remove(first_fragment)
+								self.hbin_fragments.remove(second_fragment)
+								self.hbin_fragments.remove(third_fragment)
+
+								yield (first_fragment, primary_obj.getvalue())
+
+								fragment_done = True
+								break
+
+					if fragment_done:
+						break
+
+					primary_obj.truncate(len(primary_buf)) # Remove the second fragment.
+
+			primary_obj.close()
+
+	def reconstruct_quadfragmented(self):
+		"""Try to reconstruct primary files using four fragments for each primary file."""
+
+		for first_fragment in self.regf_fragments[:]:
+			self.call_progress_callback()
+
+			fragment_done = False
+
+			hbins_data_size_first = first_fragment.size - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+			hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			self.file_object.seek(first_fragment.offset)
+			primary_buf = self.read_safe(first_fragment.size)
+			if len(primary_buf) < first_fragment.size: # The truncation point is beyond the end of the image.
+				hbins_data_size_first = len(primary_buf) - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+				hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			if len(primary_buf) < RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT: # The first fragment is too small.
+				continue
+
+			primary_obj = BytesIO(primary_buf)
+
+			primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+			for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first fragment.
+				pass
+
+			second_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - hbins_data_size_first
+			if second_fragment_margin < 0:
+				second_fragment_margin = 0
+
+			second_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+			for second_fragment in self.hbin_fragments[:]:
+				if second_fragment.hbin_start == second_hbin_start and second_fragment.size + second_fragment_margin < hbins_data_size_remaining:
+					if second_fragment.offset - second_fragment_margin >= 0:
+						self.file_object.seek(second_fragment.offset - second_fragment_margin)
+						fragment_buf_2 = self.read_safe(second_fragment.size + second_fragment_margin)
+					else:
+						continue
+
+					primary_obj.seek(len(primary_buf))
+					primary_obj.write(fragment_buf_2)
+
+					hbins_data_size_remaining_2 = hbins_data_size_remaining - len(fragment_buf_2)
+
+					primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+					for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first two fragments.
+						pass
+
+					third_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - (hbins_data_size_first + len(fragment_buf_2))
+					if third_fragment_margin < 0:
+						third_fragment_margin = 0
+
+					third_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+					for third_fragment in self.hbin_fragments[:]:
+						if third_fragment.hbin_start == third_hbin_start and third_fragment.size + third_fragment_margin < hbins_data_size_remaining_2:
+							if third_fragment.offset - third_fragment_margin >= 0:
+								self.file_object.seek(third_fragment.offset - third_fragment_margin)
+								fragment_buf_3 = self.read_safe(third_fragment.size + third_fragment_margin)
+							else:
+								continue
+
+							primary_obj.seek(len(primary_buf) + len(fragment_buf_2))
+							primary_obj.write(fragment_buf_3)
+
+							hbins_data_size_remaining_3 = hbins_data_size_remaining_2 - len(fragment_buf_3)
+
+							primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+							for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first three fragments.
+								pass
+
+							fourth_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - (hbins_data_size_first + len(fragment_buf_2) + len(fragment_buf_3))
+							if fourth_fragment_margin < 0:
+								fourth_fragment_margin = 0
+
+							fourth_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+							for fourth_fragment in self.hbin_fragments[:]:
+								if fourth_fragment.hbin_start == fourth_hbin_start and fourth_fragment.size + fourth_fragment_margin >= hbins_data_size_remaining_3:
+									if fourth_fragment.offset - fourth_fragment_margin >= 0:
+										self.file_object.seek(fourth_fragment.offset - fourth_fragment_margin)
+										fragment_buf_4 = self.read_safe(fourth_fragment.size + fourth_fragment_margin)
+									else:
+										continue
+
+									primary_obj.seek(len(primary_buf) + len(fragment_buf_2) + len(fragment_buf_3))
+									primary_obj.write(fragment_buf_4)
+
+									# Validate the hive.
+									try:
+										self.validate_reconstructed_hive(primary_obj)
+									except Registry.RegistryException:
+										# The hive is invalid, remove the fourth fragment.
+										primary_obj.truncate(len(primary_buf) + len(fragment_buf_2) + len(fragment_buf_3))
+									else:
+										# The hive is valid.
+										self.regf_fragments.remove(first_fragment)
+										self.hbin_fragments.remove(second_fragment)
+										self.hbin_fragments.remove(third_fragment)
+										self.hbin_fragments.remove(fourth_fragment)
+
+										yield (first_fragment, primary_obj.getvalue())
+
+										fragment_done = True
+										break
+
+							if fragment_done:
+								break
+
+							primary_obj.truncate(len(primary_buf) + len(fragment_buf_2)) # Remove the third fragment.
+
+					if fragment_done:
+						break
+
+					primary_obj.truncate(len(primary_buf)) # Remove the second fragment.
+
+			primary_obj.close()
+
+	def reconstruct_fragmented(self):
+		"""Try to reconstruct primary files using a variable number of fragments (two, three, four) for each primary file.
+		This method will yield the following tuples: (first_fragment, reconstructed_buffer). The type of the 'first_fragment' is CarveResult.
+		The current metadata is modified by this method: reconstructed fragments are removed from the lists.
+		"""
+
+		for r in self.reconstruct_bifragmented():
+			yield r
+
+		for r in self.reconstruct_trifragmented():
+			yield r
+
+		for r in self.reconstruct_quadfragmented():
+			yield r

@@ -80,6 +80,12 @@ hive_carving_compressed = path.join(HIVES_DIR, 'Carving', 'NTFSCompressed')
 hive_carving_compressed_noslack = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlack')
 hive_carving_compressed_noslack_1024 = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlackCluster1024')
 
+hive_recon_2 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2')
+hive_recon_3 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction3')
+hive_recon_4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction4')
+hive_recon_2plus1 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2plus1')
+hive_recon_2and4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2and4')
+
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
@@ -1914,3 +1920,97 @@ def test_invalid_parent_fragment():
 			c += 1
 
 		assert c == 1
+
+def test_bifragmented():
+	with open(hive_recon_2, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_bifragmented():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+def test_trifragmented():
+	with open(hive_recon_3, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_trifragmented():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
+
+def test_quadfragmented():
+	with open(hive_recon_4, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_quadfragmented():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
+
+def test_biplusfragmented():
+	with open(hive_recon_2plus1, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_trifragmented():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+def test_biandquadfragmented():
+	with open(hive_recon_2and4, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		c = 0
+		for i in r.reconstruct_fragmented():
+			c += 1
+
+			h = md5()
+			h.update(i[1])
+			assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f' or h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+		assert c == 2
+
+		h = RegistryCarve.Carver(f)
+		l = []
+		for i in h.carve(True, True):
+			l.append(i)
+
+		r = RegistryCarve.HiveReconstructor(f)
+		r.set_fragments(l)
+
+		c = 0
+		for i in r.reconstruct_fragmented():
+			c += 1
+
+			h = md5()
+			h.update(i[1])
+			assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f' or h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+		assert c == 2
+
