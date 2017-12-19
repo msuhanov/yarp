@@ -1,3 +1,9 @@
+Version: 1.0.8
+
+RegistryHelpers: improve the processing of bogus compressed data.
+
+---
+
 Version: 1.0.7
 
 RegistryCarve: add the HiveReconstructor class to carve and reconstruct fragmented hives, add the progress callbacks.

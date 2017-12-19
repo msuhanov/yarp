@@ -211,7 +211,14 @@ def NTFSDecompressUnit(Buffer):
 						break
 
 				# A compression tuple.
-				length_bits = 16 - compression_bits[dst_index - dst_chunk_start]
+				table_idx = dst_index - dst_chunk_start
+				try:
+					length_bits = 16 - compression_bits[table_idx]
+				except IndexError:
+					# Bogus data.
+					bogus_data = True
+					break
+
 				length_mask = (1 << length_bits) - 1
 
 				ctuple_bytes = Buffer[src_index : src_index + 2]
