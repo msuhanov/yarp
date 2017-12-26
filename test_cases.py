@@ -2013,3 +2013,60 @@ def test_biandquadfragmented():
 			assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f' or h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
 
 		assert c == 2
+
+def test_incremental():
+	with open(hive_recon_2, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_incremental():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+	with open(hive_recon_3, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_incremental():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
+
+	with open(hive_recon_4, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_incremental():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
+
+	with open(hive_recon_2plus1, 'rb') as f:
+		r = RegistryCarve.HiveReconstructor(f)
+		r.find_fragments()
+
+		h = md5()
+
+		c = 0
+		for i in r.reconstruct_incremental():
+			c += 1
+			h.update(i[1])
+
+		assert c == 1
+		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'

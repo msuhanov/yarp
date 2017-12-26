@@ -804,6 +804,126 @@ class HiveReconstructor(object):
 
 			primary_obj.close()
 
+	def reconstruct_incremental(self, mode = 0):
+		"""Try to reconstruct primary files using up to 150 fragments for each primary file. The reconstruction process is not exhaustive here.
+		When 'mode' is 0, only the largest suitable fragment will be used in each step.
+		When 'mode' is 1, the largest suitable fragment will be used in each step after the first one, and the second largest fragment will be used in the first step.
+		A step is an act of picking the next fragment for a primary file."""
+
+		hbin_fragments_count_max = 149 # The first fragment is not counted.
+
+
+		def find_largest_fragment(hbin_start):
+			fragments = []
+			for fragment in self.hbin_fragments[:]:
+				if fragment.hbin_start == hbin_start:
+					fragments.append(fragment)
+
+			largest_fragment = None
+			for fragment in fragments:
+				if largest_fragment is None or fragment.size > largest_fragment.size:
+					largest_fragment = fragment
+
+			return largest_fragment
+
+		def find_second_largest_fragment(hbin_start):
+			fragments = []
+			for fragment in self.hbin_fragments[:]:
+				if fragment.hbin_start == hbin_start:
+					fragments.append(fragment)
+
+			largest_fragment = None
+			for fragment in fragments:
+				if largest_fragment is None or fragment.size > largest_fragment.size:
+					largest_fragment = fragment
+
+			if largest_fragment is None:
+				return
+
+			fragments.remove(largest_fragment)
+			if len(fragments) == 0:
+				return
+
+			largest_fragment = None
+			for fragment in fragments:
+				if largest_fragment is None or fragment.size > largest_fragment.size:
+					largest_fragment = fragment
+
+			return largest_fragment
+
+
+		for first_fragment in self.regf_fragments[:]:
+			self.call_progress_callback()
+
+			hbins_data_size_first = first_fragment.size - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+			hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			self.file_object.seek(first_fragment.offset)
+			primary_buf = self.read_safe(first_fragment.size)
+			if len(primary_buf) < first_fragment.size: # The truncation point is beyond the end of the image.
+				hbins_data_size_first = len(primary_buf) - RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+				hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+			if len(primary_buf) < RegistryFile.BASE_BLOCK_LENGTH_PRIMARY + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT: # The first fragment is too small.
+				continue
+
+			primary_obj = BytesIO(primary_buf)
+			next_fragments_used = []
+
+			for step in range(0, hbin_fragments_count_max):
+				primary_file = RegistryFile.PrimaryFileTruncated(primary_obj)
+				for hive_bin in primary_file.hive_bins(): # Get the last hive bin in the first fragment.
+					pass
+
+				next_fragment_margin = hive_bin.get_offset() + hive_bin.get_size() - hbins_data_size_first
+				if next_fragment_margin < 0:
+					next_fragment_margin = 0
+
+				next_hbin_start = hive_bin.get_offset() + hive_bin.get_size()
+
+				if mode == 0:
+					next_fragment = find_largest_fragment(next_hbin_start)
+				if mode == 1 and step == 0:
+					next_fragment = find_second_largest_fragment(next_hbin_start)
+				else:
+					next_fragment = find_largest_fragment(next_hbin_start)
+
+				if next_fragment is None:
+					break # No fragment found, give up.
+
+				if next_fragment.offset - next_fragment_margin < 0:
+					break # Wrong fragment, give up.
+
+				self.file_object.seek(next_fragment.offset - next_fragment_margin)
+				next_fragment_buf = self.read_safe(next_fragment.size + next_fragment_margin)
+
+				primary_obj.seek(0, 2)
+				primary_obj.write(next_fragment_buf)
+
+				next_fragments_used.append(next_fragment)
+
+				hbins_data_size_first += len(next_fragment_buf)
+				hbins_data_size_remaining = first_fragment.hbins_data_size - hbins_data_size_first
+
+				if hbins_data_size_remaining <= 0:
+					# Validate the hive.
+					try:
+						self.validate_reconstructed_hive(primary_obj)
+					except Registry.RegistryException:
+						# The hive is invalid.
+						break
+					else:
+						# The hive is valid.
+						self.regf_fragments.remove(first_fragment)
+						for fragment in next_fragments_used:
+							self.hbin_fragments.remove(fragment)
+
+						yield (first_fragment, primary_obj.getvalue())
+
+					break # We are done.
+
+			primary_obj.close()
+
 	def reconstruct_fragmented(self):
 		"""Try to reconstruct primary files using a variable number of fragments (two, three, four) for each primary file.
 		This method will yield the following tuples: (first_fragment, reconstructed_buffer). The type of the 'first_fragment' is CarveResult.
@@ -817,4 +937,10 @@ class HiveReconstructor(object):
 			yield r
 
 		for r in self.reconstruct_quadfragmented():
+			yield r
+
+		for r in self.reconstruct_incremental(0):
+			yield r
+
+		for r in self.reconstruct_incremental(1):
 			yield r
