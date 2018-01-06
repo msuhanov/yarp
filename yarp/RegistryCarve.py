@@ -925,9 +925,10 @@ class HiveReconstructor(object):
 			primary_obj.close()
 
 	def reconstruct_fragmented(self):
-		"""Try to reconstruct primary files using a variable number of fragments (two, three, four) for each primary file.
+		"""Try to reconstruct primary files using a variable number of fragments (two, three, four, or more) for each primary file.
 		This method will yield the following tuples: (first_fragment, reconstructed_buffer). The type of the 'first_fragment' is CarveResult.
 		The current metadata is modified by this method: reconstructed fragments are removed from the lists.
+		This method is a wrapper for other reconstruct_*() methods.
 		"""
 
 		for r in self.reconstruct_bifragmented():
