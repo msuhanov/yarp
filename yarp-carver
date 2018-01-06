@@ -72,7 +72,7 @@ carver.progress_callback = print_progress_carving
 
 results = []
 
-print('Offset\tSize\tTruncated\tFile name or comment')
+print('Offset\tSize\tTruncated\tInternal file name / Comment')
 for carve_result in carver.carve(True, True):
 	if type(carve_result) is RegistryCarve.CarveResult:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
@@ -126,7 +126,7 @@ for carve_result in carver.carve(True, True):
 		results.append(carve_result)
 
 	elif type(carve_result) is RegistryCarve.CarveResultFragmentCompressed:
-		print('{}\t{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer_decompressed), True, '<hive fragment>'))
+		print('{}\t{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer_decompressed), True, '<compressed hive fragment>'))
 
 		output_filename = '{}-compressed_fragment'.format(carve_result.offset)
 		output_file = os.path.join(args.output_dir, output_filename)

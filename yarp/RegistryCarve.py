@@ -444,7 +444,7 @@ class HiveReconstructor(object):
 	"""Current metadata about registry fragments (a list of CarveResultFragment objects)."""
 
 	progress_callback = None
-	"""A progress callback (called after a truncated primary file has been processed). No arguments."""
+	"""A progress callback (called before a truncated primary file is processed). No arguments."""
 
 	def __init__(self, file_object):
 		self.file_object = file_object
