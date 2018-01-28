@@ -1240,6 +1240,15 @@ def test_hive_slack():
 		assert len(hive.effective_slack) > 0
 		assert b'SLCK' in hive.effective_slack
 
+		hive = Registry.RegistryHiveTruncated(f)
+		assert len(hive.effective_slack) == 0
+
+		for i in hive.scan():
+			pass
+
+		assert len(hive.effective_slack) > 0
+		assert b'SLCK' in hive.effective_slack
+
 def test_data_slack():
 	with open(hive_bigdata, 'rb') as f:
 		hive = Registry.RegistryHive(f)
@@ -1258,6 +1267,26 @@ def test_data_slack():
 		value = hive.find_key('key').value('3')
 
 		assert value.data_slack() == [ b'w Valu' ]
+
+def test_invalid_ri():
+	buf = b'ri\x00\x00'
+	with pytest.raises(RegistryRecords.ParseException):
+		ri = RegistryRecords.IndexRoot(buf)
+
+	buf = b'ri\x00\x00\x00\x00'
+	with pytest.raises(RegistryRecords.ParseException):
+		ri = RegistryRecords.IndexRoot(buf)
+
+	buf = b'ri\x01\x00\x00'
+	with pytest.raises(RegistryRecords.ParseException):
+		ri = RegistryRecords.IndexRoot(buf)
+		for i in ri.elements():
+			assert False
+
+	buf = b'ri\x01\x00\x00\x00\x00\x00'
+	ri = RegistryRecords.IndexRoot(buf)
+	for i in ri.elements():
+		pass
 
 def test_deleted_value_assoc():
 	with open(hive_deleted_data, 'rb') as f:

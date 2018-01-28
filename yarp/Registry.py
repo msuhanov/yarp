@@ -923,6 +923,9 @@ class RegistryHiveTruncated(object):
 	registry_file = None
 	"""A primary file of a hive (a RegistryFile.PrimaryFileTruncated object)."""
 
+	effective_slack = None
+	"""A set of data strings from different slack space locations to be used in the deleted data recovery."""
+
 	def __init__(self, file_object):
 		self.registry_file = RegistryFile.PrimaryFileTruncated(file_object)
 		self.effective_slack = set()
@@ -940,7 +943,7 @@ class RegistryHiveTruncated(object):
 			return DecodeFiletime(timestamp)
 
 	def scan(self):
-		"""This method yields RegistryKey objects for keys and RegistryValue objects for values."""
+		"""This method yields RegistryKey objects for keys and RegistryValue objects for values. Also, this method will collect the slack space data."""
 
 		for cell in self.registry_file.cells():
 			try:
@@ -966,3 +969,25 @@ class RegistryHiveTruncated(object):
 					pass
 				else:
 					yield value
+					continue
+
+			if len(cell_data) >= 8: # A list with at least one entry.
+				try:
+					l = RegistryRecords.IndexLeaf(cell_data)
+				except RegistryException:
+					try:
+						l = RegistryRecords.FastLeaf(cell_data)
+					except RegistryException:
+						try:
+							l = RegistryRecords.HashLeaf(cell_data)
+						except RegistryException:
+							try:
+								l = RegistryRecords.IndexRoot(cell_data)
+							except RegistryException:
+								l = None
+
+				if l is not None:
+					slack = l.get_slack()
+
+					if len(slack) >= 4: # Skip the slack space data if it is less than 4 bytes.
+						self.effective_slack.add(slack)
