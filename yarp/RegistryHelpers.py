@@ -15,6 +15,8 @@ NTFS_COMPRESSION_UNIT_SIZE = 16 * NTFS_CLUSTER_SIZE
 
 DiscoveredLogFiles = namedtuple('DiscoveredLogFiles', [ 'log_path', 'log1_path', 'log2_path' ])
 
+DataAttribute = namedtuple('DataAttribute', [ 'data_runs' ]) # The 'data_runs' field contains a list of (offset, size) tuples (all units are clusters).
+
 def DiscoverLogFiles(PrimaryPath):
 	"""Return a named tuple (DiscoveredLogFiles) describing a path to each transaction log file of a supplied primary file."""
 
@@ -312,3 +314,151 @@ def NTFSCheckCompressedSignature(Buffer, Signature):
 		return header & 0x7000 == 0x3000 and header & 0x8000 != 0 and (flags << (8 - len(Signature)) == 0)
 
 	return False
+
+def NTFSDecodeMappingPairs(MappingPairs):
+	"""Decode mapping pairs (NTFS), return a tuple (data_size, data_runs).
+	Note: Python 3 only.
+	"""
+
+	data_runs = []
+	data_size = 0
+
+	i = 0
+	first_iter = True
+	while True:
+		if i >= len(MappingPairs):
+			break
+
+		header_byte = MappingPairs[i]
+		if header_byte == 0:
+			break
+
+		i += 1
+
+		count_length = header_byte & 15
+		offset_length = header_byte >> 4
+
+		if count_length == 0 or count_length > 8 or offset_length > 8:
+			# Reject invalid values.
+			break
+
+		if offset_length == 0:
+			# This is a sparse block, ignore it and stop.
+			break
+
+		count = MappingPairs[i : i + count_length]
+		if len(count) != count_length:
+			break
+
+		i += count_length
+
+		offset = MappingPairs[i : i + offset_length]
+		if len(offset) != offset_length:
+			break
+
+		i += offset_length
+
+		count = int.from_bytes(count, byteorder = 'little', signed = True)
+		offset = int.from_bytes(offset, byteorder = 'little', signed = True)
+		if count <= 0:
+			# Invalid value.
+			break
+
+		data_size += count
+		if first_iter:
+			if offset == 0:
+				# Invalid offset.
+				break
+
+			data_runs.append((offset, count))
+			offset_prev = offset
+
+			first_iter = False
+		else:
+			offset_curr = offset_prev + offset
+			if offset_curr == 0:
+				# Unallocated data run, ignore it and stop.
+				break
+
+			offset_prev = offset_curr
+
+			data_runs.append((offset_curr, count))
+
+	return (data_size, data_runs)
+
+def NTFSValidateAndDecodeDataAttributeRecord(Buffer):
+	"""Check if Buffer starts with an applicable data attribute record (NTFS) and decode this record, return a named tuple (DataAttribute) or None (if not decoded).
+	A data attribute record is not applicable:
+	 - when its LowestVcn is not equal to 0, because the carver does not deal with mapping pairs split between different records;
+	 - when it contains a name, because the carver does not deal with alternate data streams;
+	 - when it is resident, because there are no mapping pairs in this case;
+	 - when its data is sparse, encrypted, or compressed.
+	Note: Python 3 only.
+	"""
+
+	if len(Buffer) < 64 + 1: # The buffer with a candidate data attribute record is too small.
+		return
+
+	type_code, record_length, form_code, name_length, _, flags, _ = unpack('<LLBBHHH', Buffer[ : 16])
+
+	if type_code != 0x80 or form_code != 0x01 or name_length != 0:
+		# This is not a data attribute record, or this is a resident data attribute record, or this is a data attribute record with a name.
+		return
+
+	if record_length > len(Buffer) or record_length > 950 or record_length < 64:
+		# The data attribute record is either too large or too small.
+		return
+
+	if record_length % 8 != 0:
+		# The record length is not aligned.
+		return
+
+	if flags & 0x8000 > 0 or flags & 0x4000 > 0 or flags & 0x00FF > 0:
+		# The data is sparse, or encrypted, or compressed.
+		return
+
+	nonresident_header = Buffer[16 : 64]
+	lowest_vcn, highest_vcn, mapping_pairs_offset, _, allocated_length, file_size, valid_data_length = unpack('<QQH6sQQQ', nonresident_header)
+
+	if lowest_vcn != 0:
+		# Mapping pairs are split between different records.
+		return
+
+	if highest_vcn == 0 or mapping_pairs_offset < 64 or mapping_pairs_offset > 72:
+		# Reject invalid values.
+		return
+
+	if allocated_length < 512 or allocated_length % 512 != 0 or file_size == 0 or valid_data_length == 0:
+		# Reject invalid values.
+		return
+
+	mapping_pairs = Buffer[mapping_pairs_offset : record_length]
+	if len(mapping_pairs) < 3: # A single mapping pair is at least 2 bytes in length. Also, there is a null byte at the end of mapping pairs.
+		return
+
+	data_size, data_runs = NTFSDecodeMappingPairs(mapping_pairs)
+
+	if data_size == 0 or data_runs == []:
+		# Invalid mapping pairs.
+		return
+
+	return DataAttribute(data_runs = data_runs)
+
+def NTFSFindDataAttributeRecords(Buffer):
+	"""Locate data attribute records (NTFS) in Buffer and decode these records, return a list of named tuples (DataAttribute).
+	Note: Python 3 only.
+	"""
+
+	results = []
+
+	pos = Buffer.find(b'\x80\x00\x00\x00')
+	while pos != -1 and pos < len(Buffer) - 9:
+		if Buffer[pos + 8] == 0x01 and Buffer[pos + 9] == 0:
+			data_attr = NTFSValidateAndDecodeDataAttributeRecord(Buffer[pos : pos + 4096])
+			if data_attr:
+				results.append(data_attr)
+
+		Buffer = Buffer[pos + 1 : ]
+		pos = Buffer.find(b'\x80\x00\x00\x00')
+
+	return results

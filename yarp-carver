@@ -12,7 +12,37 @@ import sys
 PROGRAM_NAME = 'yarp-carver'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction' ])
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction', 'ntfs_offsets' ])
+
+def parse_ntfs_offsets(ntfs_offsets):
+	if ntfs_offsets is None:
+		return set()
+
+	if len(ntfs_offsets) != 1:
+		return set()
+
+	ntfs_offsets = ntfs_offsets[0]
+	results = set()
+
+	offsets = ntfs_offsets.split(',')
+	for offset in offsets:
+		try:
+			offset = int(offset)
+		except ValueError:
+			print('Invalid offset (not an integer): {}'.format(offset), file = sys.stderr)
+			continue
+
+		if offset > 0 and offset % 512 != 0:
+			print('Invalid offset (not aligned): {}'.format(offset), file = sys.stderr)
+			continue
+
+		if offset < 0:
+			print('Invalid offset (negative): {}'.format(offset), file = sys.stderr)
+			continue
+
+		results.add(offset)
+
+	return results
 
 def parse_args():
 	"""Parse command line arguments and return a named tuple (Arguments)."""
@@ -27,6 +57,7 @@ def parse_args():
 	group_main.add_argument('outdir', help = 'an output directory')
 
 	group_opt.add_argument('--no-reconstruction', action = 'store_true', help = 'do not reconstruct fragmented hives')
+	group_opt.add_argument('--volumes', action = 'store', nargs = 1, metavar = 'offsets', default = None, help = 'use a given comma-separated list of NTFS volume offsets (in bytes) to reconstruct fragmented hives using NTFS metadata (this requires reading the disk image twice)')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
 	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
@@ -36,8 +67,9 @@ def parse_args():
 	source_file = parsed_args.file
 	output_dir = parsed_args.outdir
 	no_reconstruction = parsed_args.no_reconstruction
+	ntfs_offsets = parse_ntfs_offsets(parsed_args.volumes)
 
-	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction)
+	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction, ntfs_offsets = ntfs_offsets)
 
 def make_sane_filename(filename):
 	for bad_char in [ '\x00', '/', '\\', ':' ]:
@@ -157,5 +189,28 @@ if not args.no_reconstruction:
 			out_f.write(hive_buf)
 
 	print('', file = sys.stderr)
+
+	if len(args.ntfs_offsets) > 0:
+		ntfs_carver = RegistryCarve.NTFSAwareCarver(f)
+		ntfs_carver.progress_callback = print_progress_carving
+		ntfs_carver.set_fragments(results)
+
+		print('', file = sys.stderr)
+		print('Searching for NTFS data attribute records', file = sys.stderr)
+		ntfs_carver.find_data_runs()
+
+		print('Reconstructing fragmented hives...', file = sys.stderr)
+		for ntfs_offset in args.ntfs_offsets:
+			for carve_result, hive_buf in ntfs_carver.reconstruct_ntfs(ntfs_offset):
+				regf_filename = carve_result.filename
+				if regf_filename.rfind('\\') != -1:
+					regf_filename = regf_filename.split('\\')[-1]
+				regf_filename = make_sane_filename(regf_filename)
+
+				output_filename = '{}_{}-reconstructed_ntfs'.format(carve_result.offset, regf_filename)
+				output_file = os.path.join(args.output_dir, output_filename)
+
+				with open(output_file, 'wb') as out_f:
+					out_f.write(hive_buf)
 
 f.close()

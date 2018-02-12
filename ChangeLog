@@ -1,3 +1,11 @@
+Version: 1.0.13
+
+RegistryHelpers: add functions to work with data attribute records (NTFS).
+RegistryCarve: implement the NTFS-aware carver.
+yarp-carver: if NTFS volume offsets were given, run the NTFS-aware carver.
+
+---
+
 Version: 1.0.12
 
 Registry: collect the slack space when parsing a truncated hive.

@@ -1,7 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 #
-# This module implements an interface to carve registry hives from a disk image.
+# This module implements an interface to carve registry hives (and fragments) from a disk image.
 
 from __future__ import unicode_literals
 
@@ -945,3 +945,215 @@ class HiveReconstructor(object):
 
 		for r in self.reconstruct_incremental(1):
 			yield r
+
+class NTFSAwareCarver(DiskImage):
+	"""This class is used to carve fragmented registry files (primary) from an NTFS volume (a disk image) using active and remnant data attribute records.
+	Compressed (NTFS) registry files (primary) and unfragmented registry files (primary) are not carved.
+	Note: Python 3 only.
+	"""
+
+	regf_fragments = None
+	"""Current metadata about truncated primary files (a list of CarveResult objects)."""
+
+	data_runs = None
+	"""Current metadata about NTFS data runs (a list of DataAttribute objects)."""
+
+	cluster_sizes = None
+	"""A list of common cluster sizes (NTFS)."""
+
+	progress_callback  = None
+	"""A progress callback. Arguments: bytes_read, bytes_total. Note: the carver may read a disk image twice."""
+
+	def __init__(self, file_object):
+		super(NTFSAwareCarver, self).__init__(file_object)
+
+		self.regf_fragments = []
+		self.data_runs = []
+
+		self.chunk_size = 32768
+		self.callback_threshold = 2*1024*1024*1024 # In bytes (a multiple of the 'chunk_size' value).
+
+		self.cluster_sizes = [ 4096, 512, 1024, 2048, 8192 ]
+
+	def call_progress_callback(self, bytes_read, bytes_total):
+		"""Call the progress callback, if defined."""
+
+		if self.progress_callback is None:
+			return
+
+		if bytes_read < self.callback_threshold or bytes_read % self.callback_threshold != 0:
+			return
+
+		self.progress_callback(bytes_read, bytes_total)
+
+	def find_fragments(self):
+		"""Carve truncated primary files from a disk image, return the number of truncated primary files found."""
+
+		self.regf_fragments = []
+
+		carver = Carver(self.file_object)
+		carver.progress_callback = self.progress_callback
+
+		for result in carver.carve(False, False):
+			if result.truncated:
+				self.regf_fragments.append(result)
+
+		return len(self.regf_fragments)
+
+	def save_fragments(self, file_path):
+		"""Save the current metadata about truncated primary files to a file (using the 'pickle' module)."""
+
+		with open(file_path, 'wb') as f:
+			pickle.dump(self.regf_fragments, f)
+
+	def load_fragments(self, file_path):
+		"""Load the metadata about truncated primary files from a file (using the 'pickle' module), return the number of truncated primary files loaded."""
+
+		with open(file_path, 'rb') as f:
+			self.regf_fragments = pickle.load(f)
+
+		return len(self.regf_fragments)
+
+	def set_fragments(self, fragments_list):
+		"""Load the metadata about truncated primary files from an existing list, return the number of truncated primary files loaded."""
+
+		self.regf_fragments = []
+
+		for i in fragments_list:
+			if type(i) is CarveResult:
+				if i.truncated:
+					self.regf_fragments.append(i)
+
+		return len(self.regf_fragments)
+
+	def find_data_runs(self):
+		"""Carve data runs from a disk image, return the number of data runs found."""
+
+		self.data_runs = []
+
+		pos = 0
+		file_size = self.size()
+		while pos < file_size:
+			self.call_progress_callback(pos, file_size)
+
+			buf = self.read(pos, self.chunk_size)
+			data_attrs = RegistryHelpers.NTFSFindDataAttributeRecords(buf)
+			if len(data_attrs) > 0:
+				self.data_runs.extend(data_attrs)
+
+			if len(buf) != self.chunk_size: # End of a file or a read error.
+				break
+
+			pos += self.chunk_size
+
+		return len(self.data_runs)
+
+	def save_data_runs(self, file_path):
+		"""Save the current metadata about data runs to a file (using the 'pickle' module)."""
+
+		with open(file_path, 'wb') as f:
+			pickle.dump(self.data_runs, f)
+
+	def load_data_runs(self, file_path):
+		"""Load the metadata about data runs from a file (using the 'pickle' module), return the number of data runs loaded."""
+
+		with open(file_path, 'rb') as f:
+			self.data_runs = pickle.load(f)
+
+		return len(self.data_runs)
+
+	def set_data_runs(self, data_runs_list):
+		"""Load the metadata about data runs from an existing list, return the number of data runs loaded."""
+
+		self.data_runs = []
+
+		for i in data_runs_list:
+			if type(i) is RegistryHelpers.DataAttribute:
+				self.data_runs.append(i)
+
+		return len(self.data_runs)
+
+	def validate_reconstructed_hive(self, primary_object):
+		"""Check if a reconstructed hive looks valid. If not, an exception is raised."""
+
+		hive = Registry.RegistryHive(primary_object)
+		hive.walk_everywhere()
+
+		file_size_expected = hive.registry_file.baseblock.effective_hbins_data_size + RegistryFile.BASE_BLOCK_LENGTH_PRIMARY
+
+		primary_object.seek(0, 2)
+		file_size_real = primary_object.tell()
+
+		if file_size_real > 1024*1024 and file_size_real > 2 * file_size_expected:
+			raise ValidationException('File is too large')
+
+	def reconstruct_ntfs(self, ntfs_volume_offset = 0):
+		"""This method yields the following tuples: (first_fragment, reconstructed_buffer). The type of the 'first_fragment' is CarveResult.
+		The 'ntfs_volume_offset' argument is the NTFS volume offset in bytes.
+		Reconstructed truncated primary files and corresponding data runs are removed from the metadata lists by this method.
+		"""
+
+		if ntfs_volume_offset > 0 and ntfs_volume_offset % SECTOR_SIZE != 0:
+			raise ValueError('Invalid NTFS volume offset: {}'.format(ntfs_volume_offset))
+
+		for cluster_size in self.cluster_sizes:
+			for regf_fragment in self.regf_fragments[:]:
+				regf_offset_in_volume = regf_fragment.offset - ntfs_volume_offset
+				if regf_offset_in_volume <= 0:
+					# The fragment does not belong to this volume.
+					continue
+
+				if regf_offset_in_volume < cluster_size or regf_offset_in_volume % cluster_size != 0:
+					# The fragment does not belong to this volume or the cluster size is wrong.
+					continue
+
+				regf_cluster = regf_offset_in_volume // cluster_size
+
+				for attr in self.data_runs[:]:
+					if len(attr.data_runs) <= 1:
+						# Not a fragmented data run.
+						continue
+
+					first_cluster = attr.data_runs[0][0]
+					if regf_cluster != first_cluster:
+						continue
+
+					# Found a matching data run.
+					primary_object = BytesIO()
+					for offset_in_clusters, size_in_clusters in attr.data_runs:
+						offset = offset_in_clusters * cluster_size + ntfs_volume_offset
+						size = size_in_clusters * cluster_size
+
+						if offset + size > 0xFFFFFFFFFFFFFFFF:
+							# Invalid chunk.
+							break
+
+						if size > FILE_SIZE_MAX_MIB * 1024 * 1024:
+							# Chunk is too large.
+							break
+
+						curr_buf = self.read(offset, size)
+						primary_object.write(curr_buf)
+
+						if primary_object.tell() > FILE_SIZE_MAX_MIB * 1024 * 1024:
+							# File is too large.
+							break
+
+						if len(curr_buf) != size:
+							# Truncated data.
+							break
+
+					try:
+						self.validate_reconstructed_hive(primary_object)
+					except Registry.RegistryException:
+						pass
+					else:
+						self.regf_fragments.remove(regf_fragment)
+						self.data_runs.remove(attr)
+
+						yield (regf_fragment, primary_object.getvalue())
+
+						primary_object.close()
+						break
+
+					primary_object.close()

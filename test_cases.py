@@ -2099,3 +2099,63 @@ def test_incremental():
 
 		assert c == 1
 		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
+
+def test_ntfs_data_attr():
+	if sys.version_info.major != 3:
+		pytest.skip()
+
+	assert not RegistryHelpers.NTFSValidateAndDecodeDataAttributeRecord(b'')
+
+	buf = b'\x80\x00\x00\x00H\x00\x00\x00\x01\x00\x00\x00\x00\x00\x03'
+	assert not RegistryHelpers.NTFSValidateAndDecodeDataAttributeRecord(buf)
+
+	buf = b'\x80\x00\x00\x00H\x00\x00\x00\x01\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00Q\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00 \x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x001R\x8d\xef\x00\x00\x00\x00'
+	data_attr = RegistryHelpers.NTFSValidateAndDecodeDataAttributeRecord(buf)
+	assert data_attr
+	assert data_attr.data_runs == [ (61325, 82) ]
+
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(b'')
+	assert data_size == 0
+	assert data_runs == []
+
+	mapping_pairs = b'\x11\x30\x60\x21\x10\x00\x01\x11\x20\xE0\x00'
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(mapping_pairs)
+	assert data_size == 96
+	assert data_runs == [ (96, 48), (352, 16), (320, 32) ]
+
+	mapping_pairs = b'\x11\x30\x60\x21\x10\x00\x01\x11\x20\xE0\x00\x00'
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(mapping_pairs)
+	assert data_size == 96
+	assert data_runs == [ (96, 48), (352, 16), (320, 32) ]
+
+	mapping_pairs = b'\x11\x30\x60\x21\x10\x00\x01\x11\x20\xE0'
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(mapping_pairs)
+	assert data_size == 96
+	assert data_runs == [ (96, 48), (352, 16), (320, 32) ]
+
+	mapping_pairs = b'\x11\x30\x60\x21\x10\x00\x01\x11\x20'
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(mapping_pairs)
+	assert data_size == 64
+	assert data_runs == [ (96, 48), (352, 16) ]
+
+	mapping_pairs = b'\x11\x30\x20\x01\x60\x11\x10\x30\x00'
+	data_size, data_runs = RegistryHelpers.NTFSDecodeMappingPairs(mapping_pairs)
+	assert data_size == 48
+	assert data_runs == [ (32, 48) ]
+
+	buf = b'\x80\x00\x00\x00H\x00\x00\x00\x01\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00Q\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00 \x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x001R\x8d\xef\x00\x00\x00\x00'
+	data_attrs = RegistryHelpers.NTFSFindDataAttributeRecords(buf)
+	assert len(data_attrs) == 1
+	assert data_attrs[0].data_runs == [ (61325, 82) ]
+
+	buf = b'\x00\x80\x00\x00\x00H\x00\x00\x00\x01\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00Q\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00 \x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x001R\x8d\xef\x00\x00\x00\x00'
+	data_attrs = RegistryHelpers.NTFSFindDataAttributeRecords(buf)
+	assert len(data_attrs) == 1
+	assert data_attrs[0].data_runs == [ (61325, 82) ]
+
+	buf = b'\x00\x00\x80\x00\x00\x00H\x00\x00\x00\x01\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00Q\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00\x00 \x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x00\xc0\x10\x05\x00\x00\x00\x00\x001R\x8d\xef\x00\x00\x00\x00'
+	data_attrs = RegistryHelpers.NTFSFindDataAttributeRecords(buf)
+	assert len(data_attrs) == 1
+	assert data_attrs[0].data_runs == [ (61325, 82) ]
+
+	assert RegistryHelpers.NTFSFindDataAttributeRecords(b'') == []
