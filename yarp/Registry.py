@@ -28,6 +28,18 @@ RegistryRecords.REG_RESOURCE_REQUIREMENTS_LIST: 'REG_RESOURCE_REQUIREMENTS_LIST'
 RegistryRecords.REG_QWORD: 'REG_QWORD'
 }
 
+HiveRoles = {
+'SYSTEM': [ ( 'ControlSet001', 'ControlSet002', 'ControlSet003' ), 'Select' ],
+'SOFTWARE': [ 'Microsoft', 'Classes', ( 'Secure', 'Policies' ) ],
+'NTUSER/DEFAULT': [ 'Software', 'Control Panel', ( 'AppEvents', 'Keyboard Layout' ) ],
+'SECURITY': [ 'Policy', 'RXACT' ],
+'BCD': [ 'Description', 'Objects' ],
+'COMPONENTS': [ 'Installers', 'CanonicalData' ],
+'SAM': [ 'SAM' ],
+'USRCLASS': [ 'Local Settings' ],
+'AMCACHE': [ 'Root' ]
+}
+
 AutoRecoveryResult = namedtuple('AutoRecoveryResult', [ 'recovered', 'is_new_log', 'file_objects' ])
 
 class WalkException(RegistryException):
@@ -103,6 +115,68 @@ def DecodeUnicodeMulti(Buffer, RemoveGarbage = False):
 			pos += 2
 
 	return DecodeUnicode(Buffer)
+
+def GuessHiveRole(file_object):
+	"""Guess the role of a given hive (as a file object), return a string (for example, 'SYSTEM') or None.
+	For a list of known hive roles, see the keys of the 'HiveRoles' dictionary.
+	"""
+
+	def collect_keys_normal(file_object):
+		keys = []
+
+		hive = RegistryHive(file_object)
+		for subkey in hive.root_key().subkeys():
+			keys.append(subkey.name().upper())
+
+		return keys
+
+	def collect_keys_truncated(file_object):
+		keys = []
+
+		hive = RegistryHiveTruncated(file_object)
+		for item in hive.scan():
+			if type(item) is not RegistryKey:
+				continue
+
+			key = item
+			try:
+				parent = key.parent()
+				if parent is not None:
+					if parent.parent() is None:
+						keys.append(key.name().upper())
+			except RegistryException:
+				pass
+
+		return keys
+
+	try:
+		keys = collect_keys_normal(file_object)
+	except RegistryException:
+		try:
+			keys = collect_keys_truncated(file_object)
+		except RegistryException:
+			return
+
+	if len(keys) == 0:
+		return
+
+	for hive_role in HiveRoles.keys():
+		signs = HiveRoles[hive_role]
+		matches = 0
+
+		for sign in signs:
+			if type(sign) is tuple:
+				for sign_i in sign:
+					if sign_i.upper() in keys:
+						matches += 1
+						break
+			else:
+				if sign.upper() in keys:
+					matches += 1
+
+		if len(signs) == matches:
+			# Found a match.
+			return hive_role
 
 class RegistryHive(object):
 	"""This is a high-level class for a registry hive."""
@@ -971,7 +1045,7 @@ class RegistryHiveTruncated(object):
 					yield value
 					continue
 
-			if len(cell_data) >= 8: # A list with at least one entry.
+			if len(cell_data) >= 8: # A subkeys list with at least one entry.
 				try:
 					l = RegistryRecords.IndexLeaf(cell_data)
 				except RegistryException:
@@ -984,7 +1058,7 @@ class RegistryHiveTruncated(object):
 							try:
 								l = RegistryRecords.IndexRoot(cell_data)
 							except RegistryException:
-								l = None
+								l = None # Not a subkeys list.
 
 				if l is not None:
 					slack = l.get_slack()
