@@ -1,3 +1,9 @@
+Version: 1.0.15
+
+RegistrySqlite: recover deleted data from the slack space when parsing a truncated hive.
+
+---
+
 Version: 1.0.14
 
 Registry: add a function to guess the role of a hive, minor changes.

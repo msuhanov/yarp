@@ -140,8 +140,8 @@ class YarpDB(object):
 
 				self._db_init()
 
-				self._db_process_deleted_data()
 				self._db_process_partial_data()
+				self._db_process_deleted_data()
 				return
 
 			self._db_init()
@@ -154,8 +154,8 @@ class YarpDB(object):
 
 			self._db_init()
 
-			self._db_process_deleted_data()
 			self._db_process_partial_data()
+			self._db_process_deleted_data()
 
 	def __enter__(self):
 		return self
