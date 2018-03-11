@@ -223,8 +223,12 @@ class RegistryFile(object):
 		return self.file_object.tell()
 
 	def read_binary(self, pos, length):
-		self.file_object.seek(self.file_offset + pos)
-		b = self.file_object.read(length)
+		try:
+			self.file_object.seek(self.file_offset + pos)
+			b = self.file_object.read(length)
+		except OverflowError:
+			raise ReadException('Cannot read data (offset overflow)')
+
 		if len(b) == length:
 			return b
 
@@ -760,7 +764,7 @@ class LogEntry(RegistryFile):
 			raise LogEntryException('Invalid dirty pages count: {}'.format(dirty_pages_count))
 
 		if not self.validate_hashes():
-			raise LogEntryException('Invalid hashes'.format(dirty_pages_count))
+			raise LogEntryException('Invalid hashes')
 
 		sequence_number = self.get_sequence_number()
 		if sequence_number != expected_sequence_number:
