@@ -13,7 +13,7 @@ import sys
 PROGRAM_NAME = 'yarp-timeline'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'primary_file', 'faster', 'truncated' ])
+Arguments = namedtuple('Arguments', [ 'primary_file', 'faster', 'remnant', 'truncated' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
 
 def parse_args():
@@ -28,6 +28,7 @@ def parse_args():
 	group_main.add_argument('file', help = 'a registry file (primary) to parse')
 
 	group_opt.add_argument('--fast', action = 'store_true', help = 'do not use intermediate states to extend the timeline when applying a transaction log (new format)')
+	group_opt.add_argument('--remnant', action = 'store_true', help = 'include remnant data from transaction log files (new format)')
 	group_opt.add_argument('--truncated', action = 'store_true', help = 'treat the registry file (primary) as truncated (this will also ignore transaction log files)')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
@@ -37,9 +38,10 @@ def parse_args():
 
 	primary_file = parsed_args.file
 	faster = parsed_args.fast
+	remnant = parsed_args.remnant
 	truncated = parsed_args.truncated
 
-	return Arguments(primary_file = primary_file, faster = faster, truncated = truncated)
+	return Arguments(primary_file = primary_file, faster = faster, remnant = remnant, truncated = truncated)
 
 keys_list = []
 def extend_keys_list(do_deleted = False):
@@ -75,7 +77,7 @@ def extend_keys_list(do_deleted = False):
 				if key_parsed is not None:
 					keys_list.append(key_parsed)
 
-def extend_keys_list_truncated(do_deleted = False):
+def extend_keys_list_truncated():
 	global hive
 	global keys_list
 
@@ -85,13 +87,74 @@ def extend_keys_list_truncated(do_deleted = False):
 			if key_parsed is not None:
 				keys_list.append(key_parsed)
 
-	if do_deleted:
-		scanner = RegistryRecover.Scanner(hive, False)
-		for item in scanner.scan():
-			if type(item) is Registry.RegistryKey:
-				key_parsed = parse_key(item, True)
-				if key_parsed is not None:
-					keys_list.append(key_parsed)
+	scanner = RegistryRecover.Scanner(hive, False)
+	for item in scanner.scan():
+		if type(item) is Registry.RegistryKey:
+			key_parsed = parse_key(item, True)
+			if key_parsed is not None:
+				keys_list.append(key_parsed)
+
+def process_remnant_data(log_files, recovery_result):
+	def process_log_file(file_object, is_unused):
+		try:
+			log = RegistryFile.NewLogFile(file_object)
+		except Registry.RegistryException:
+			return 0
+
+		global keys_list
+		counter = 0
+
+		sequence_numbers = log.list_remnant_log_entries(is_unused)
+		for sequence_number in sequence_numbers:
+			primary_file_rebuilt = log.rebuild_primary_file_using_remnant_log_entries(is_unused, sequence_number)
+			counter += 1
+
+			hive = Registry.RegistryHiveTruncated(primary_file_rebuilt)
+			for item in hive.scan():
+				if type(item) is Registry.RegistryKey:
+					key_parsed = parse_key(item, False) # Treat this key as is (not as a deleted one).
+					if key_parsed is not None:
+						keys_list.append(key_parsed)
+
+			scanner = RegistryRecover.Scanner(hive, False)
+			for item in scanner.scan():
+				if type(item) is Registry.RegistryKey:
+					key_parsed = parse_key(item, True)
+					if key_parsed is not None:
+						keys_list.append(key_parsed)
+
+			hive = None
+			primary_file_rebuilt.close()
+
+		return counter
+
+	log_files_unused = []
+	log_files_used = []
+
+	if not recovery_result.recovered:
+		for log_file in log_files:
+			if log_file is None:
+				continue
+
+			log_files_unused.append(log_file)
+	else:
+		for log_file in log_files:
+			if log_file is None:
+				continue
+
+			if log_file in recovery_result.file_objects:
+				log_files_used.append(log_file)
+			else:
+				log_files_unused.append(log_file)
+
+	counter = 0
+	for log_file in log_files_unused:
+		counter += process_log_file(log_file, True)
+
+	for log_file in log_files_used:
+		counter += process_log_file(log_file, False)
+
+	print('Processed {} remnant log entries'.format(counter), file = sys.stderr)
 
 def parse_key(key, is_deleted):
 	try:
@@ -164,7 +227,7 @@ if is_truncated and not args.truncated:
 
 if args.truncated:
 	hive = Registry.RegistryHiveTruncated(primary)
-	extend_keys_list_truncated(True)
+	extend_keys_list_truncated()
 
 	keys_list = list(set(keys_list))
 	keys_list.sort(key = lambda x: x.timestamp, reverse = True)
@@ -202,6 +265,9 @@ else:
 		extend_keys_list() # Finally, extend the list of keys (without deleted ones) after an old transaction log file has been applied.
 	elif recovery_result.recovered and recovery_result.is_new_log and args.faster:
 		extend_keys_list()
+
+	if args.remnant:
+		process_remnant_data([log, log1, log2], recovery_result)
 
 keys_list = list(set(keys_list))
 keys_list.sort(key = lambda x: x.timestamp, reverse = True)

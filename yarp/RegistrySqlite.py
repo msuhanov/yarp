@@ -13,6 +13,7 @@ from collections import namedtuple
 
 Key = namedtuple('Key', [ 'rowid', 'is_deleted', 'name', 'classname', 'last_written_timestamp', 'access_bits', 'parent_key_id' ])
 Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'parent_key_id' ])
+Security = namedtuple('Security', [ 'rowid', 'owner_sid' ])
 HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated', 'rebuilt' ])
 
 class YarpDB(object):
@@ -39,7 +40,8 @@ class YarpDB(object):
 					'`classname` TEXT,'
 					'`last_written_timestamp` TEXT,'
 					'`access_bits` INTEGER,'
-					'`parent_key_id` TEXT'
+					'`parent_key_id` TEXT,'
+					'`security_rowid` INTEGER'
 					')')
 	"""Schema for the 'keys' table."""
 
@@ -52,6 +54,11 @@ class YarpDB(object):
 					'`parent_key_id` TEXT'
 					')')
 	"""Schema for the 'values' table."""
+
+	schema_security = ('CREATE TABLE `security` ('
+					'`owner_sid` TEXT'
+					')')
+	"""Schema for the 'security' table."""
 
 	def __init__(self, primary_or_fragment_path, sqlite_path, no_recovery = False):
 		"""Create an sqlite3 database using 'sqlite_path', the database is filled with data from a registry file (primary) or a registry fragment specified by 'primary_or_fragment_path'.
@@ -193,6 +200,7 @@ class YarpDB(object):
 		self.db_cursor.execute('DROP TABLE IF EXISTS `hive`')
 		self.db_cursor.execute('DROP TABLE IF EXISTS `keys`')
 		self.db_cursor.execute('DROP TABLE IF EXISTS `values`')
+		self.db_cursor.execute('DROP TABLE IF EXISTS `security`')
 
 	def _db_init(self):
 		"""Create the tables and indices. Set up basic data about the hive."""
@@ -208,6 +216,8 @@ class YarpDB(object):
 
 		self.db_cursor.execute('CREATE INDEX `values_idx_name` ON `values`(`name`)')
 		self.db_cursor.execute('CREATE INDEX `values_idx_parent_key_id` ON `values`(`parent_key_id`)')
+
+		self.db_cursor.execute(self.schema_security)
 
 		# Insert data about the hive.
 		last_written_timestamp = str(self._hive.registry_file.baseblock.effective_last_written_timestamp)
@@ -282,6 +292,18 @@ class YarpDB(object):
 		else:
 			return data_offset in self._hive.registry_file.cell_map_allocated
 
+	def _db_store_security_info(self, owner_sid):
+		"""Add new security information to the database and return its security row ID. If the same information already exists in the database, just return its security row ID."""
+
+		self.db_cursor.execute('SELECT `rowid` from `security` WHERE `owner_sid` = ?', (owner_sid,))
+
+		results = self.db_cursor.fetchall()
+		for result in results:
+			return result[0]
+
+		self.db_cursor.execute('INSERT INTO `security` (`owner_sid`) VALUES (?)', (owner_sid,))
+		return self.db_cursor.lastrowid
+
 	def _db_add_key(self, key, is_deleted = 0):
 		"""Add a key and its values to the database."""
 
@@ -296,6 +318,21 @@ class YarpDB(object):
 				raise
 
 			classname = None
+
+		try:
+			security = key.security()
+		except Registry.RegistryException:
+			security = None
+
+		security_rowid = None
+		if security is not None:
+			security_descriptor = security.descriptor()
+			try:
+				owner_sid = RegistryHelpers.ParseSecurityDescriptorRelative(security_descriptor).owner_sid
+			except Exception:
+				pass
+			else:
+				security_rowid = self._db_store_security_info(owner_sid)
 
 		last_written_timestamp = str(key.key_node.get_last_written_timestamp())
 		access_bits = key.access_bits()
@@ -316,9 +353,19 @@ class YarpDB(object):
 				else:
 					parent_key_status = 1
 
-				parent_key_id = self._db_key_to_id(parent_key, parent_key_status)
+				invalid_parent_key = False
+				if parent_key_status: # Validate a deleted parent key.
+					try:
+						RegistryRecover.ValidateKey(parent_key)
+					except (Registry.RegistryException, UnicodeDecodeError, ValueError, OverflowError):
+						invalid_parent_key = True
 
-				if parent_key_id == key_id: # Invalid parent key.
+				if not invalid_parent_key:
+					parent_key_id = self._db_key_to_id(parent_key, parent_key_status)
+				else:
+					parent_key_id = None
+
+				if parent_key_id is not None and parent_key_id == key_id: # Invalid parent key.
 					parent_key_id = None
 			else:
 				# This is the root key.
@@ -330,8 +377,8 @@ class YarpDB(object):
 					# Two or more keys are marked as root, do not trust them.
 					self.db_cursor.execute('UPDATE `hive` SET `root_key_id` = ? WHERE `id` = ?', (None, 0))
 
-		self.db_cursor.execute('INSERT OR IGNORE INTO `keys` (`id`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id`) VALUES (?, ?, ?, ?, ?, ?, ?)',
-			(key_id, is_deleted, name, classname, last_written_timestamp, access_bits, parent_key_id))
+		self.db_cursor.execute('INSERT OR IGNORE INTO `keys` (`id`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id`, `security_rowid`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+			(key_id, is_deleted, name, classname, last_written_timestamp, access_bits, parent_key_id, security_rowid))
 
 		try:
 			for value in key.values():
@@ -451,6 +498,19 @@ class YarpDB(object):
 
 			for result in results:
 				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
+
+	def security_info(self, key_rowid):
+		"""Return security information for a key with a specific row ID."""
+
+		self.db_cursor.execute('SELECT `security_rowid` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
+		security_rowid = self.db_cursor.fetchone()[0]
+
+		owner_sid = None
+		if security_rowid is not None:
+			self.db_cursor.execute('SELECT `owner_sid` FROM `security` WHERE `rowid` = ?', (security_rowid,))
+			owner_sid = self.db_cursor.fetchone()[0]
+
+		return Security(rowid = security_rowid, owner_sid = owner_sid)
 
 	def value(self, value_rowid):
 		"""Get and return a value by its row ID (or None, if not found)."""

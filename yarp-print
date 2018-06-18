@@ -90,6 +90,16 @@ def print_key(key):
 	print('Last written timestamp (UTC): {}'.format(key.last_written_timestamp()))
 	print('Access bits: {}'.format(key.access_bits()))
 
+	security = key.security()
+	if security is not None:
+		security_descriptor = security.descriptor()
+		try:
+			owner_sid = RegistryHelpers.ParseSecurityDescriptorRelative(security_descriptor).owner_sid
+		except Exception:
+			owner_sid = 'invalid'
+
+		print('Owner SID: {}'.format(owner_sid))
+
 	print()
 
 	for value in key.values():
@@ -180,6 +190,20 @@ def print_deleted_key(key):
 		print('Last written timestamp is not plausible')
 
 	print('Access bits: {}'.format(key.access_bits()))
+
+	try:
+		security = key.security()
+	except Registry.RegistryException:
+		security = None
+
+	if security is not None:
+		security_descriptor = security.descriptor()
+		try:
+			owner_sid = RegistryHelpers.ParseSecurityDescriptorRelative(security_descriptor).owner_sid
+		except Exception:
+			owner_sid = 'invalid'
+
+		print('Owner SID: {}'.format(owner_sid))
 
 	print()
 

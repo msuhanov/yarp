@@ -17,6 +17,8 @@ DiscoveredLogFiles = namedtuple('DiscoveredLogFiles', [ 'log_path', 'log1_path',
 
 DataAttribute = namedtuple('DataAttribute', [ 'data_runs' ]) # The 'data_runs' field contains a list of (offset, size) tuples (all units are clusters).
 
+SecurityInfo = namedtuple('SecurityInfo', [ 'owner_sid' ])
+
 def DiscoverLogFiles(PrimaryPath):
 	"""Return a named tuple (DiscoveredLogFiles) describing a path to each transaction log file of a supplied primary file."""
 
@@ -462,3 +464,67 @@ def NTFSFindDataAttributeRecords(Buffer):
 		pos = Buffer.find(b'\x80\x00\x00\x00')
 
 	return results
+
+def ParseSID(Buffer):
+	"""Parse a security identifier, return a string.
+	Note: Python 3 only.
+	"""
+
+	if len(Buffer) < 8:
+		raise ValueError('SID buffer is too short')
+
+	sid_revision, sid_subauthoritycount, sid_identifierauthority = unpack('<BB6s', Buffer[ : 8])
+	sid_str = 'S-{}'.format(sid_revision)
+
+	sid_identifierauthority_int = int.from_bytes(sid_identifierauthority, byteorder = 'big', signed = False)
+	if sid_identifierauthority_int < 0x100000000:
+		sid_str += '-{}'.format(sid_identifierauthority_int)
+	else:
+		sid_str += '-0x{}'.format(format(sid_identifierauthority_int, 'X'))
+
+	sa_left = sid_subauthoritycount
+	sa_offset = 8
+	while sa_left > 0:
+		sa_buf = Buffer[sa_offset : sa_offset + 4]
+		if len(sa_buf) != 4:
+			raise ValueError('SID buffer is too short for a subauthority')
+
+		sa_int = unpack('<L', sa_buf)[0]
+		sid_str += '-{}'.format(sa_int)
+
+		sa_offset += 4
+		sa_left -= 1
+
+	return sid_str
+
+def ParseSecurityDescriptorRelative(Buffer):
+	"""Parse a relative security descriptor, return a named tuple (SecurityInfo).
+	Note: Python 3 only.
+	"""
+
+	def ValidateOffset(Offset):
+		if Offset == 0: # A special value (the field is missing).
+			return True
+
+		is_valid_offset = Offset >= 20 and Offset <= len(Buffer) - 4
+		return is_valid_offset
+
+	if len(Buffer) < 20:
+		raise ValueError('Invalid size of a security descriptor')
+
+	revision, sbz1, control, p_owner, p_group, p_sacl, p_dacl = unpack('<BBHLLLL', Buffer[ : 20])
+
+	if revision != 1:
+		raise ValueError('Invalid revision number')
+
+	if control >> 15 == 0:
+		raise ValueError('Not a relative security descriptor')
+
+	is_owner_missing_or_invalid = (p_owner == 0) or (not ValidateOffset(p_owner))
+	if is_owner_missing_or_invalid:
+		# Give up, because we do not parse other fields.
+		return SecurityInfo(owner_sid = None)
+
+	owner_sid = ParseSID(Buffer[p_owner : ])
+
+	return SecurityInfo(owner_sid = owner_sid)

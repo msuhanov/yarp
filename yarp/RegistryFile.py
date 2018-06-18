@@ -739,6 +739,23 @@ class OldLogFile(object):
 			dirty_page = DirtyPage(self.file_object, log_file_offset, 512, primary_file_offset)
 			yield dirty_page
 
+	def get_remnant_data(self, is_unused_log_file = False):
+		"""This method returns remnant data."""
+
+		remnant_data_start = self.get_dirty_pages_starting_offset()
+		if not is_unused_log_file:
+			for dirty_page in self.dirty_pages():
+				try:
+					b_ = dirty_page.get_bytes()
+				except DirtyPageException:
+					break
+
+				remnant_data_start = dirty_page.log_file_offset + dirty_page.page_size
+
+		self.file_object.seek(remnant_data_start)
+		remnant_data = self.file_object.read()
+		return remnant_data
+
 class LogEntry(RegistryFile):
 	"""This is a class for a log entry, it provides methods to read dirty pages references and to map dirty pages.
 	Most methods are self-explanatory.
@@ -864,6 +881,8 @@ class NewLogFile(object):
 		if self.file_size <= BASE_BLOCK_LENGTH_LOG + 40: # Check if at least one log entry can be present in the file.
 			raise FileSizeException('Invalid file size: {}'.format(self.file_size))
 
+		self.remnant_data_start = None
+
 	def log_entries(self):
 		"""This method yields LogEntry objects."""
 
@@ -880,6 +899,139 @@ class NewLogFile(object):
 
 			curr_pos += curr_logentry.get_size()
 			current_sequence_number = c_uint32(current_sequence_number + 1).value # Handle a possible overflow.
+
+		self.remnant_data_start = curr_pos
+
+	def get_remnant_data_pos(self, is_unused_log_file = False):
+		"""This method returns the effective starting position of remnant data."""
+
+		if not is_unused_log_file:
+			if self.remnant_data_start is None:
+				for log_entry in self.log_entries():
+					pass
+
+			return self.remnant_data_start
+		else:
+			return BASE_BLOCK_LENGTH_LOG
+
+	def get_remnant_data(self, is_unused_log_file = False):
+		"""This method returns remnant data."""
+
+		remnant_data_start = self.get_remnant_data_pos(is_unused_log_file)
+
+		self.file_object.seek(remnant_data_start)
+		remnant_data = self.file_object.read()
+		return remnant_data
+
+	def remnant_log_entries(self, is_unused_log_file = False):
+		"""This method yields LogEntry objects for remnant (but valid) log entries (if any)."""
+
+		def parse_log_entry_header(buf):
+			if len(buf) < 40:
+				return (False, None)
+
+			signature = buf[ : 4 ]
+			if signature != b'HvLE':
+				return (False, None)
+
+			sequence_number_bytes = buf[ 12 : 16 ]
+			sequence_number = unpack('<L', sequence_number_bytes)[0]
+
+			return (True, sequence_number)
+
+		curr_pos = self.get_remnant_data_pos(is_unused_log_file)
+		while curr_pos < self.file_size:
+			self.file_object.seek(curr_pos)
+			buf = self.file_object.read(40)
+
+			is_logentry, sequence_number = parse_log_entry_header(buf)
+			if is_logentry:
+				try:
+					curr_logentry = LogEntry(self.file_object, curr_pos, sequence_number)
+				except LogEntryException:
+					pass
+				else:
+					yield curr_logentry
+
+					curr_pos += curr_logentry.get_size()
+					continue
+
+			curr_pos += 512
+
+	def list_remnant_log_entries(self, is_unused_log_file = False):
+		"""This method returns a sorted list of sequence numbers for remnant (but valid) log entries."""
+
+		sequence_numbers = []
+
+		for log_entry in self.remnant_log_entries(is_unused_log_file):
+			sequence_numbers.append(log_entry.get_sequence_number())
+
+		return sorted(sequence_numbers)
+
+	def rebuild_primary_file_using_remnant_log_entries(self, is_unused_log_file = False, stop_after_sequence_number = None):
+		"""This method rebuilds a truncated primary file using remnant (but valid) log entries, returns the BytesIO object with rebuilt data (or None).
+		When 'stop_after_sequence_number' is not None, stop after applying a log entry with a specified sequence number.
+		"""
+
+		remnant_log_entries = dict()
+		hbins_data_size_max = None
+
+		for log_entry in self.remnant_log_entries(is_unused_log_file):
+			sequence_number = log_entry.get_sequence_number()
+			remnant_log_entries[sequence_number] = log_entry
+
+			hbins_data_size = log_entry.get_hbins_data_size()
+			if hbins_data_size_max is None or hbins_data_size_max < hbins_data_size:
+				hbins_data_size_max = hbins_data_size
+
+		if len(remnant_log_entries.keys()) == 0:
+			return
+
+		effective_version = self.baseblock.effective_version
+		effective_root_cell_offset = self.baseblock.effective_root_cell_offset
+
+		allocation_size = BASE_BLOCK_LENGTH_PRIMARY + hbins_data_size_max
+
+		# Create a new file object using the calculated allocation size.
+		truncated_primary_file_object = BytesIO(b'\x00' * allocation_size)
+
+		# Create and fill a base block.
+		reg_file = RegistryFile(truncated_primary_file_object)
+
+		reg_file.write_binary(0, b'regf')
+		reg_file.write_uint32(4, 1)
+		reg_file.write_uint32(8, 1)
+		reg_file.write_uint64(12, 0)
+		reg_file.write_uint32(20, 1)
+		reg_file.write_uint32(24, effective_version)
+		reg_file.write_uint32(28, FILE_TYPE_PRIMARY)
+		reg_file.write_uint32(32, FILE_FORMAT_DIRECT_MEMORY_LOAD)
+		reg_file.write_uint32(36, effective_root_cell_offset)
+		reg_file.write_uint32(40, hbins_data_size_max)
+		reg_file.write_uint32(44, FILE_CLUSTERING_FACTOR)
+		reg_file.write_binary(508, b'INVL')
+
+		# Apply dirty pages from remnant log entries.
+		for sequence_number in sorted(remnant_log_entries.keys()):
+			log_entry = remnant_log_entries[sequence_number]
+
+			# Update the sequence numbers.
+			reg_file.write_uint32(4, sequence_number)
+			reg_file.write_uint32(8, sequence_number)
+
+			for dirty_page in log_entry.dirty_pages():
+				# Update the hive bins data.
+				try:
+					dirty_page_bytes = dirty_page.get_bytes()
+				except DirtyPageException:
+					break # We do not want to break the outer loop.
+
+				reg_file.write_binary(dirty_page.primary_file_offset, dirty_page_bytes)
+
+			if stop_after_sequence_number is not None and sequence_number >= stop_after_sequence_number:
+				break
+
+		return truncated_primary_file_object
 
 class PrimaryFile(object):
 	"""This is a class for a primary file, it provides methods to read the file, to build the maps of cells, and to recover the file using a transaction log."""
@@ -1034,7 +1186,7 @@ class PrimaryFile(object):
 		self.__init__(self.file_object, self.tolerate_minor_errors)
 
 	def save_recovered_hive(self, filepath):
-		"""Save the recovered hive to a new primary file."""
+		"""Save the recovered hive to a new primary file (using its path)."""
 
 		if self.log_apply_count == 0:
 			raise NotSupportedException('Cannot save a hive that was not recovered')
@@ -1168,6 +1320,7 @@ class PrimaryFile(object):
 	def apply_new_log_files(self, log_file_object_1, log_file_object_2, callback = None):
 		"""Apply two transaction log files (new format) to a primary file.
 		After a log entry has been applied, call an optional callback function.
+		This method returns a list of transaction log files (file objects) applied.
 		"""
 
 		def is_starting_log(this_sequence_number, another_sequence_number):
@@ -1204,11 +1357,16 @@ class PrimaryFile(object):
 				self.apply_new_log_file(first, callback)
 			except NotEligibleException:
 				self.apply_new_log_file(second, callback)
+				return [second]
 			else:
 				if self.last_sequence_number is not None and second_baseblock.get_primary_sequence_number() == c_uint32(self.last_sequence_number + 1).value:
 					self.apply_new_log_file(second, callback)
+					return [first, second]
+
+				return [first]
 		else:
 			self.apply_new_log_file(second, callback) # This is how Windows works.
+			return [second]
 
 class PrimaryFileTruncated(object):
 	"""This is a class for a truncated primary file, it provides methods to read the truncated file, to build the maps of cells, and to yield each cell.

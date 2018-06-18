@@ -235,12 +235,14 @@ class RegistryHive(object):
 		"""Recover a primary file using a single transaction log file or two transaction log files.
 		When 'file_object_log2' is None, a single transaction log file is used.
 		Transaction log files should be in the new format.
+		This method return a list of transaction log files (file objects) applied.
 		"""
 
 		if file_object_log2 is None:
 			self.registry_file.apply_new_log_file(file_object_log_or_log1, self.log_entry_callback)
+			return [file_object_log_or_log1]
 		else:
-			self.registry_file.apply_new_log_files(file_object_log_or_log1, file_object_log2, self.log_entry_callback)
+			return self.registry_file.apply_new_log_files(file_object_log_or_log1, file_object_log2, self.log_entry_callback)
 
 	def recover_old(self, file_object_log):
 		"""Recover a primary file using a single transaction log file.
@@ -300,8 +302,8 @@ class RegistryHive(object):
 
 		# We prefer the new format and the dual-logging scheme.
 		if log1_new is not None and log2_new is not None:
-			self.recover_new(log1, log2)
-			return AutoRecoveryResult(recovered = True, is_new_log = True, file_objects = [log1, log2])
+			logs_applied = self.recover_new(log1, log2)
+			return AutoRecoveryResult(recovered = True, is_new_log = True, file_objects = logs_applied)
 
 		if log1_new is not None:
 			self.recover_new(log1)
@@ -349,7 +351,7 @@ class RegistryHive(object):
 		self.registry_file.save_recovered_hive(filepath)
 
 	def rollback_changes(self):
-		"""Discard recovered data and use a primary file as is."""
+		"""Discard recovered data and use a primary file as is. The effective slack remains intact."""
 
 		self.registry_file.discard_writable_file_object()
 

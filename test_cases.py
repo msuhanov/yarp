@@ -73,6 +73,8 @@ hive_deleted_tree_partial_path = path.join(HIVES_DIR, 'DeletedTreePartialPathHiv
 hive_slack = path.join(HIVES_DIR, 'SlackHive')
 hive_truncated_dirty = path.join(HIVES_DIR, 'TruncatedDirtyHive')
 
+log_with_remnant_data = path.join(HIVES_DIR, 'OldLogWithRemnantData')
+
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
@@ -89,6 +91,8 @@ hive_recon_2and4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconst
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
+
+hive_two_owners = path.join(HIVES_DIR, 'TwoOwnersHive')
 
 fragment_sqlite = path.join(HIVES_DIR, 'SqliteFragment')
 fragment_sqlite_db = path.join(HIVES_DIR, 'SqliteFragment.sqlite')
@@ -255,10 +259,11 @@ def test_dirty_new1(reverse):
 		log_entry_counter.c = 0
 
 		if not reverse:
-			hive.recover_new(log1, log2)
+			t = hive.recover_new(log1, log2)
 		else:
-			hive.recover_new(log2, log1)
+			t = hive.recover_new(log2, log1)
 
+		assert t == [log1, log2] or t == [log2, log1]
 		assert log_entry_counter.c == 4
 
 		assert hive.registry_file.log_apply_count == 2
@@ -307,9 +312,10 @@ def test_dirty_new2():
 
 		assert hive.registry_file.baseblock.validate_checksum()
 		assert hive.registry_file.log_apply_count == 0
-		hive.recover_new(log1, log2)
+		t = hive.recover_new(log1, log2)
 		assert hive.registry_file.log_apply_count == 1
 		assert hive.registry_file.last_sequence_number == 5
+		assert t == [log2]
 
 def test_dirty_old():
 	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
@@ -451,18 +457,18 @@ def test_autorecovery():
 		t = hive.recover_auto(dummy, log1, log2)
 		t = convert_tuple(t)
 		assert hive.registry_file.log_apply_count == 1
-		assert len(t) == 3
+		assert len(t) == 2
 		assert t[0]
-		assert t[1] == log1 and t[2] == log2
+		assert t[1] == log2
 
 	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 		t = hive.recover_auto(None, log1, log2)
 		t = convert_tuple(t)
 		assert hive.registry_file.log_apply_count == 1
-		assert len(t) == 3
+		assert len(t) == 2
 		assert t[0]
-		assert t[1] == log1 and t[2] == log2
+		assert t[1] == log2
 
 	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
 		hive = Registry.RegistryHive(primary)
@@ -1305,6 +1311,86 @@ def test_deleted_value_assoc():
 
 		assert c == 1
 
+def test_old_log_with_remnant_data():
+	with open(log_with_remnant_data, 'rb') as f:
+		h = RegistryFile.OldLogFile(f)
+
+		remnant_data_1 = h.get_remnant_data()
+		remnant_data_2 = h.get_remnant_data()
+		assert remnant_data_1 == remnant_data_2 == b'remn'
+
+		f.seek(1024)
+		remnant_data_expected_when_unused = f.read()
+		remnant_data_1 = h.get_remnant_data(True)
+		remnant_data_2 = h.get_remnant_data(True)
+		assert remnant_data_1 == remnant_data_2 == remnant_data_expected_when_unused
+
+	with open(hive_dirty_old_log, 'rb') as f:
+		h = RegistryFile.OldLogFile(f)
+
+		remnant_data_1 = h.get_remnant_data()
+		remnant_data_2 = h.get_remnant_data()
+		assert remnant_data_1 == remnant_data_2 == b''
+
+def test_new_log_with_remnant_data():
+	with open(hive_dirty_new2_log1, 'rb') as f:
+		h = RegistryFile.NewLogFile(f)
+
+		remnant_data_1 = h.get_remnant_data()
+		remnant_data_2 = h.get_remnant_data()
+		assert remnant_data_1 == remnant_data_2 == b''
+
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		h = RegistryFile.NewLogFile(f)
+
+		remnant_data_1 = h.get_remnant_data()
+		remnant_data_2 = h.get_remnant_data()
+		assert remnant_data_1 == remnant_data_2 == b'\x00' * 24576
+
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		h = RegistryFile.NewLogFile(f)
+
+		remnant_data_1 = h.get_remnant_data(True)
+		remnant_data_2 = h.get_remnant_data(True)
+
+		f.seek(512)
+		remnant_data_expected_when_unused = f.read()
+		assert remnant_data_1 == remnant_data_2 == remnant_data_expected_when_unused
+
+def test_remnant_log_entries():
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		h = RegistryFile.NewLogFile(f)
+
+		for i in h.remnant_log_entries(False):
+			assert False
+
+		c = 0
+		for i in h.remnant_log_entries(True):
+			assert i.get_sequence_number() in [ 3, 4, 5 ]
+			c += 1
+
+		assert c == 3
+
+def test_new_log_rebuild():
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		log = RegistryFile.NewLogFile(f)
+
+		b = log.rebuild_primary_file_using_remnant_log_entries(True)
+		h = Registry.RegistryHive(b)
+		h.walk_everywhere()
+
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		log = RegistryFile.NewLogFile(f)
+
+		b = log.rebuild_primary_file_using_remnant_log_entries(False)
+		assert b is None
+
+	with open(hive_dirty_new2_log2, 'rb') as f:
+		log = RegistryFile.NewLogFile(f)
+
+		assert log.list_remnant_log_entries(True) == [ 3, 4, 5 ]
+		assert log.list_remnant_log_entries(False) == []
+
 def test_sqlite():
 	if sys.version_info.major != 3:
 		pytest.skip()
@@ -1787,6 +1873,7 @@ def test_sqlite():
 		assert root.classname is None
 		assert root.last_written_timestamp == 131491245452005837
 		assert root.access_bits == 0
+		assert h.security_info(root.rowid).owner_sid == 'S-1-5-32-544'
 
 		c = 0
 		for subkey in h.subkeys(root.rowid):
@@ -1797,6 +1884,7 @@ def test_sqlite():
 			assert subkey.access_bits == 0
 			assert not subkey.is_deleted
 			assert h.get_rowid(subkey.parent_key_id) == root.rowid
+			assert h.security_info(root.rowid).owner_sid == 'S-1-5-32-544'
 
 		assert c == 2
 
@@ -1846,7 +1934,7 @@ def test_sqlite():
 
 		assert c == 3
 
-	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h:
+	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h: # Warning: this test does not use the current database layout.
 		assert h.info().recovered == 0
 		assert h.info().truncated == 1
 		assert h.info().rebuilt == 1
@@ -1918,6 +2006,20 @@ def test_sqlite():
 
 		for i in h.values_unassociated():
 			pass
+
+	with RegistrySqlite.YarpDB(hive_two_owners, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
+
+		rowid = h.root_key().rowid
+		assert h.security_info(rowid).owner_sid == 'S-1-5-32-544'
+		for subkey in h.subkeys(rowid):
+			assert (subkey.name == u'Новый раздел #1' and h.security_info(subkey.rowid).owner_sid == 'S-1-5-32-544') or (subkey.name == u'Новый раздел #2' and h.security_info(subkey.rowid).owner_sid == 'S-1-5-21-3115585512-2168299736-1589779262-1003')
+
+		h.db_cursor.execute('SELECT COUNT(*) FROM `security`')
+		cnt = h.db_cursor.fetchone()[0]
+		assert cnt == 2
 
 def test_translator():
 	with open(truncated_hbin, 'rb') as src_obj:
@@ -2159,3 +2261,46 @@ def test_ntfs_data_attr():
 	assert data_attrs[0].data_runs == [ (61325, 82) ]
 
 	assert RegistryHelpers.NTFSFindDataAttributeRecords(b'') == []
+
+def test_sid_parsing():
+	if sys.version_info.major != 3:
+		pytest.skip()
+
+	sid = b'\x01\x05\x00\x00\x00\x00\x00\x05\x15\x00\x00\x00\x32\x16\x89\x26\x0e\x2f\xad\x6f\xfa\x0f\xef\x24\x56\x04\x00\x00'
+	assert RegistryHelpers.ParseSID(sid) == 'S-1-5-21-646518322-1873620750-619646970-1110'
+
+	sid_tooshort = sid[ : -1]
+	with pytest.raises(ValueError):
+		RegistryHelpers.ParseSID(sid_tooshort)
+
+	sid_tooshort = sid[ : -2]
+	with pytest.raises(ValueError):
+		RegistryHelpers.ParseSID(sid_tooshort)
+
+	sid_tooshort = sid[ : -3]
+	with pytest.raises(ValueError):
+		RegistryHelpers.ParseSID(sid_tooshort)
+
+	sid_tooshort = sid[ : -4]
+	with pytest.raises(ValueError):
+		RegistryHelpers.ParseSID(sid_tooshort)
+
+	sid_tooshort = sid[ : -5]
+	with pytest.raises(ValueError):
+		RegistryHelpers.ParseSID(sid_tooshort)
+
+	sid_toolong = sid + b'\x00'
+	assert RegistryHelpers.ParseSID(sid_toolong) == 'S-1-5-21-646518322-1873620750-619646970-1110'
+
+	sid_toolong = sid + b'\x00\x00'
+	assert RegistryHelpers.ParseSID(sid_toolong) == 'S-1-5-21-646518322-1873620750-619646970-1110'
+
+def test_key_security():
+	if sys.version_info.major != 3:
+		pytest.skip()
+
+	with open(hive_empty, 'rb') as primary:
+		hive = Registry.RegistryHive(primary)
+		descriptor = hive.root_key().security().descriptor()
+		secinfo = RegistryHelpers.ParseSecurityDescriptorRelative(descriptor)
+		assert secinfo.owner_sid == 'S-1-5-32-544'
