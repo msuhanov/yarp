@@ -206,7 +206,7 @@ def print_jsonl_entry(entry, registry_file):
 			'key_path': entry.path_or_name,
 			'is_deleted': entry.is_deleted,
 			'is_path_known': entry.is_path_known,
-			'timestamp': entry.timestamp
+			'timestamp': entry.timestamp.isoformat()
 		}
 	)
 
