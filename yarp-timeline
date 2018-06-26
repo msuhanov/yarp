@@ -13,7 +13,7 @@ import sys
 PROGRAM_NAME = 'yarp-timeline'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'primary_file', 'faster', 'remnant', 'truncated' ])
+Arguments = namedtuple('Arguments', [ 'primary_file', 'faster', 'remnant', 'truncated', 'jsonl' ])
 TimelineEntry = namedtuple('TimelineEntry', [ 'path_or_name', 'is_deleted', 'is_path_known', 'timestamp' ])
 
 def parse_args():
@@ -30,6 +30,7 @@ def parse_args():
 	group_opt.add_argument('--fast', action = 'store_true', help = 'do not use intermediate states to extend the timeline when applying a transaction log (new format)')
 	group_opt.add_argument('--remnant', action = 'store_true', help = 'include remnant data from transaction log files (new format)')
 	group_opt.add_argument('--truncated', action = 'store_true', help = 'treat the registry file (primary) as truncated (this will also ignore transaction log files)')
+	group_opt.add_argument('--jsonl', action = 'store_true', help = 'produce the JSONL output (one JSON value per line)')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
 	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
@@ -40,8 +41,9 @@ def parse_args():
 	faster = parsed_args.fast
 	remnant = parsed_args.remnant
 	truncated = parsed_args.truncated
+	jsonl = parsed_args.jsonl
 
-	return Arguments(primary_file = primary_file, faster = faster, remnant = remnant, truncated = truncated)
+	return Arguments(primary_file = primary_file, faster = faster, remnant = remnant, truncated = truncated, jsonl = jsonl)
 
 keys_list = []
 def extend_keys_list(do_deleted = False):
@@ -196,6 +198,17 @@ def print_timeline(registry_file):
 	for entry in keys_list:
 		print_timeline_entry(entry, registry_file)
 
+def print_timeline_jsonl(registry_file):
+	import json
+	global keys_list
+
+	for entry in keys_list:
+		timestamp_str = entry.timestamp.isoformat()
+		entry_dict = { 'registry_file': registry_file, 'key_path_or_name': entry.path_or_name, 'is_deleted': entry.is_deleted, 'is_path_known': entry.is_path_known, 'timestamp': timestamp_str }
+		json_line = json.dumps(entry_dict)
+
+		print(json_line)
+
 args = parse_args()
 
 if not os.path.isfile(args.primary_file):
@@ -231,7 +244,11 @@ if args.truncated:
 
 	keys_list = list(set(keys_list))
 	keys_list.sort(key = lambda x: x.timestamp, reverse = True)
-	print_timeline(args.primary_file)
+
+	if not args.jsonl:
+		print_timeline(args.primary_file)
+	else:
+		print_timeline_jsonl(args.primary_file)
 
 	hive = None
 	primary.close()
@@ -271,7 +288,11 @@ else:
 
 keys_list = list(set(keys_list))
 keys_list.sort(key = lambda x: x.timestamp, reverse = True)
-print_timeline(args.primary_file)
+
+if not args.jsonl:
+	print_timeline(args.primary_file)
+else:
+	print_timeline_jsonl(args.primary_file)
 
 hive = None
 primary.close()

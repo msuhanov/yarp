@@ -1,3 +1,9 @@
+Version: 1.0.18
+
+yarp-timeline: add the JSONL output.
+
+---
+
 Version: 1.0.17
 
 RegistryFile: add functions to extract remnant data from transaction log files.
