@@ -72,6 +72,7 @@ hive_deleted_tree_no_root_flag = path.join(HIVES_DIR, 'DeletedTreeNoRootFlagHive
 hive_deleted_tree_partial_path = path.join(HIVES_DIR, 'DeletedTreePartialPathHive')
 hive_slack = path.join(HIVES_DIR, 'SlackHive')
 hive_truncated_dirty = path.join(HIVES_DIR, 'TruncatedDirtyHive')
+hive_values_order = path.join(HIVES_DIR, 'ValuesOrderHive')
 
 log_with_remnant_data = path.join(HIVES_DIR, 'OldLogWithRemnantData')
 
@@ -2020,6 +2021,22 @@ def test_sqlite():
 		h.db_cursor.execute('SELECT COUNT(*) FROM `security`')
 		cnt = h.db_cursor.fetchone()[0]
 		assert cnt == 2
+
+	with RegistrySqlite.YarpDB(hive_values_order, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
+
+		values_sorted = [ 'aaa', 'bbb', 'zzz' ]
+		values_original = [ 'aaa', 'zzz', 'bbb' ]
+
+		rowid = h.root_key().rowid
+
+		for value in h.values(rowid, False):
+			assert value.name == values_sorted.pop(0)
+
+		for value in h.values(rowid, True):
+			assert value.name == values_original.pop(0)
 
 def test_translator():
 	with open(truncated_hbin, 'rb') as src_obj:

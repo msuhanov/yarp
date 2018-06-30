@@ -1,6 +1,7 @@
 Version: 1.0.18
 
 yarp-timeline: add the JSONL output.
+RegistrySqlite: yield values of a key in the original order (if requested).
 
 ---
 

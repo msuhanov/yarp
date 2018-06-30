@@ -262,7 +262,7 @@ class YarpDB(object):
 		return hasher.hexdigest()
 
 	def _db_value_to_id(self, value, is_deleted = 0):
-		"""Calculate and return the ID for a value."""
+		"""Calculate and return the ID for a value. This should preserve the original order of values of a key."""
 
 		curr_id = self._value_id
 		self._value_id += 1
@@ -521,14 +521,19 @@ class YarpDB(object):
 		for result in results:
 			return Value(rowid = result[0], is_deleted = result[1], name = result[2], type = result[3], data = result[4], parent_key_id = result[5])
 
-	def values(self, key_rowid):
+	def values(self, key_rowid, use_original_order = False):
 		"""Get and yield values of a key with a specific row ID."""
 
 		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
 		p = self.db_cursor.fetchone()
 		if p is not None:
 			p = p[0]
-			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ? ORDER BY UPPER(`name`) ASC', (p,))
+
+			if not use_original_order:
+				self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ? ORDER BY UPPER(`name`) ASC', (p,))
+			else:
+				self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `type`, `data`, `parent_key_id` FROM `values` WHERE `parent_key_id` = ? ORDER BY UPPER(`id`) ASC', (p,))
+
 			results = self.db_cursor.fetchall()
 
 			for result in results:
