@@ -92,6 +92,7 @@ hive_recon_2and4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconst
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
+hive_dupname_sqlite = path.join(HIVES_DIR, 'DupNameHive')
 
 hive_two_owners = path.join(HIVES_DIR, 'TwoOwnersHive')
 
@@ -2008,6 +2009,16 @@ def test_sqlite():
 		for i in h.values_unassociated():
 			pass
 
+		for subkey in h.subkeys_with_name(root.rowid, 'nosuchkey'):
+			assert False
+
+		c = 0
+		for subkey in h.subkeys_with_name(root.rowid, 'a1'):
+			assert subkey.name == 'A1' and subkey.last_written_timestamp == 131491247867995634
+			c += 1
+
+		assert c == 1
+
 	with RegistrySqlite.YarpDB(hive_two_owners, ':memory:') as h:
 		assert h.info().recovered == 0
 		assert h.info().truncated == 0
@@ -2037,6 +2048,40 @@ def test_sqlite():
 
 		for value in h.values(rowid, True):
 			assert value.name == values_original.pop(0)
+
+	with RegistrySqlite.YarpDB(hive_dupname_sqlite, ':memory:') as h:
+		assert h.info().recovered == 0
+		assert h.info().truncated == 0
+		assert h.info().rebuilt == 0
+
+		rowid = h.root_key().rowid
+		for subkey in h.subkeys(rowid):
+			assert subkey.name in [ 'bbb', 'ccc', u'Новый раздел #1' ]
+
+		i = 0
+		for subkey in h.subkeys_with_name(rowid, 'cCC'):
+			if i == 0:
+				assert not subkey.is_deleted
+				assert subkey.name == 'ccc'
+			elif i == 1:
+				assert subkey.is_deleted
+				assert subkey.name == 'ccc'
+
+			i += 1
+
+		assert i == 2
+
+		i = 0
+		for subkey in h.subkeys_with_name(rowid, u'новый раздел #1'):
+			assert subkey.is_deleted
+			assert subkey.name == u'Новый раздел #1'
+
+			i += 1
+
+		assert i == 1
+
+		for subkey in h.subkeys_with_name(rowid, 'nosuchkey'):
+			assert False
 
 def test_translator():
 	with open(truncated_hbin, 'rb') as src_obj:

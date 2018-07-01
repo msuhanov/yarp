@@ -16,6 +16,11 @@ Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'pa
 Security = namedtuple('Security', [ 'rowid', 'owner_sid' ])
 HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated', 'rebuilt' ])
 
+def sqlite3_upper_unicode(string):
+	"""The UPPER()-like function with Unicode support."""
+
+	return string.upper()
+
 class YarpDB(object):
 	"""This is an implementation of a registry hive to an sqlite3 database converter (and a simple interface to the database)."""
 
@@ -75,12 +80,14 @@ class YarpDB(object):
 			self._log2 = None
 
 			self._db_connection = sqlite3.connect(sqlite_path, check_same_thread = False)
+			self._db_connection.create_function('UPPER_UNICODE', 1, sqlite3_upper_unicode)
 			self.db_cursor = self._db_connection.cursor()
 
 			return
 
 		# Open the database, open the cursor.
 		self._db_connection = sqlite3.connect(sqlite_path, check_same_thread = False)
+		self._db_connection.create_function('UPPER_UNICODE', 1, sqlite3_upper_unicode)
 		self.db_cursor = self._db_connection.cursor()
 
 		# Open the primary file.
@@ -475,6 +482,19 @@ class YarpDB(object):
 		if p is not None:
 			p = p[0]
 			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ? ORDER BY UPPER(`name`) ASC', (p,))
+			results = self.db_cursor.fetchall()
+
+			for result in results:
+				yield Key(rowid = result[0], is_deleted = result[1], name = result[2], classname = result[3], last_written_timestamp = int(result[4]), access_bits = result[5], parent_key_id = result[6])
+
+	def subkeys_with_name(self, key_rowid, name):
+		"""Get and yield subkeys with the given name. This method may yield two or more subkeys if a parent key (specified by its row ID) has deleted subkeys."""
+
+		self.db_cursor.execute('SELECT `id` FROM `keys` WHERE `rowid` = ?', (key_rowid,))
+		p = self.db_cursor.fetchone()
+		if p is not None:
+			p = p[0]
+			self.db_cursor.execute('SELECT `rowid`, `is_deleted`, `name`, `classname`, `last_written_timestamp`, `access_bits`, `parent_key_id` FROM `keys` WHERE `parent_key_id` = ? AND UPPER_UNICODE(`name`) = UPPER_UNICODE(?) ORDER BY `is_deleted` ASC', (p, name))
 			results = self.db_cursor.fetchall()
 
 			for result in results:
