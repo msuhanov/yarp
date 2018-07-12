@@ -6,7 +6,7 @@
 
 import ctypes
 
-__revision__ = 1 # This value will be incremented each time this module is updated.
+__revision__ = 2 # This value will be incremented each time this module is updated.
 
 # Definitions: constants and structures
 _TOKEN_ADJUST_PRIVILEGES = 0x20
@@ -110,7 +110,7 @@ class NTFileLikeObject(object):
 		return self.seek(0, 1)
 
 	def read(self, size = None):
-		if size is None or size <= 0:
+		if size is None or size < 0:
 			size = self.max_size - self.tell()
 
 		if size <= 0: # Nothing to read.
@@ -238,7 +238,7 @@ class RegistryHivesLive(object):
 		"""Export and then open a hive using its registry path.
 		If 'FilePath' is not None, use this path to save an exported hive (as a file).
 		If 'FilePath' is None, create a temporary file to store an exported hive (in a current directory).
-		This method returns a file-like object to an exported hive.
+		This method returns a file-like object for an exported hive.
 		"""
 
 		if self._src_handle is not None:
@@ -281,7 +281,7 @@ class RegistryHivesLive(object):
 		"""Export and then open an application hive using its file system path.
 		If 'FilePath' is not None, use this path to save an exported hive (as a file).
 		If 'FilePath' is None, create a temporary file to store an exported hive (in a current directory).
-		This method returns a file-like object to an exported hive.
+		This method returns a file-like object for an exported hive.
 		"""
 
 		if self._src_handle is not None:
