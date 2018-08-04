@@ -950,6 +950,8 @@ class NewLogFile(object):
 					curr_logentry = LogEntry(self.file_object, curr_pos, sequence_number)
 				except LogEntryException:
 					pass
+				except ReadException:
+					break
 				else:
 					yield curr_logentry
 

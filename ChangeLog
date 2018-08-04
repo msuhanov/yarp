@@ -1,3 +1,10 @@
+Version: 1.0.20
+
+RegistryFile: handle truncated remnant log entries.
+yarp-timeline: change the message about remnant log entries.
+
+---
+
 Version: 1.0.19
 
 RegistryLive: fix the read() behaviour when the size is set to zero (NTFileLikeObject), minor changes.
