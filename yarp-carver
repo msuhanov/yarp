@@ -3,16 +3,17 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
-from yarp import RegistryCarve, __version__
+from yarp import RegistryCarve, RegistryFile, __version__
 import argparse
 from collections import namedtuple
+from io import BytesIO
 import os
 import sys
 
 PROGRAM_NAME = 'yarp-carver'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction', 'ntfs_offsets' ])
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction', 'ntfs_offsets', 'rebuild_margin' ])
 
 def parse_ntfs_offsets(ntfs_offsets):
 	if ntfs_offsets is None:
@@ -56,6 +57,7 @@ def parse_args():
 	group_main.add_argument('file', help = 'a disk image')
 	group_main.add_argument('outdir', help = 'an output directory')
 
+	group_opt.add_argument('--rebuild-margin', action = 'store_true', help = 'include a margin (registry data with no specific header preceding an identified fragment) to a fragment by rebuilding it')
 	group_opt.add_argument('--no-reconstruction', action = 'store_true', help = 'do not reconstruct fragmented hives')
 	group_opt.add_argument('--volumes', action = 'store', nargs = 1, metavar = 'offsets', default = None, help = 'use a given comma-separated list of NTFS volume offsets (in bytes) to reconstruct fragmented hives using NTFS metadata (this requires reading the disk image twice)')
 
@@ -68,8 +70,9 @@ def parse_args():
 	output_dir = parsed_args.outdir
 	no_reconstruction = parsed_args.no_reconstruction
 	ntfs_offsets = parse_ntfs_offsets(parsed_args.volumes)
+	rebuild_margin = parsed_args.rebuild_margin
 
-	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction, ntfs_offsets = ntfs_offsets)
+	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction, ntfs_offsets = ntfs_offsets, rebuild_margin = rebuild_margin)
 
 def make_sane_filename(filename):
 	for bad_char in [ '\x00', '/', '\\', ':' ]:
@@ -105,7 +108,7 @@ carver.progress_callback = print_progress_carving
 results = []
 
 print('Offset\tSize\tTruncated\tInternal file name / Comment')
-for carve_result in carver.carve(True, True):
+for carve_result in carver.carve(True, True, args.rebuild_margin):
 	if type(carve_result) is RegistryCarve.CarveResult:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
 
@@ -129,17 +132,52 @@ for carve_result in carver.carve(True, True):
 		results.append(carve_result)
 
 	elif type(carve_result) is RegistryCarve.CarveResultFragment:
-		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<hive fragment>'))
+		if not args.rebuild_margin:
+			print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<hive fragment>'))
 
-		output_filename = '{}-fragment'.format(carve_result.offset)
-		output_file = os.path.join(args.output_dir, output_filename)
+			output_filename = '{}-fragment'.format(carve_result.offset)
+			output_file = os.path.join(args.output_dir, output_filename)
 
-		with open(output_file, 'wb') as out_f:
-			f.seek(carve_result.offset)
-			buf = f.read(carve_result.size)
-			out_f.write(buf)
+			with open(output_file, 'wb') as out_f:
+				f.seek(carve_result.offset)
+				buf = f.read(carve_result.size)
+				out_f.write(buf)
 
-		results.append(carve_result)
+			results.append(carve_result)
+		else:
+			print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<hive fragment, margin = {}>'.format(carve_result.suggested_margin)))
+
+			if carve_result.suggested_margin > 0:
+				output_filename = '{}-fragment_with_margin'.format(carve_result.offset)
+			else:
+				output_filename = '{}-fragment_no_margin'.format(carve_result.offset)
+
+			output_file = os.path.join(args.output_dir, output_filename)
+
+			if carve_result.suggested_margin > 0:
+				f.seek(carve_result.offset - carve_result.suggested_margin)
+				buf = f.read(carve_result.size + carve_result.suggested_margin)
+				tmp_f_1 = BytesIO(buf)
+				try:
+					tmp_f_2 = RegistryFile.FragmentWithMarginTranslator(tmp_f_1, carve_result.suggested_margin)
+				except (RegistryFile.HiveBinException, ValueError):
+					# Something is wrong with the margin, write a usual fragment instead.
+					tmp_f_1.close()
+					f.seek(carve_result.offset)
+					buf = f.read(carve_result.size)
+					output_filename = '{}-fragment_with_invalid_margin'.format(carve_result.offset)
+				else:
+					tmp_f_1.close()
+					buf = tmp_f_2.getvalue()
+					tmp_f_2.close()
+			else:
+				f.seek(carve_result.offset)
+				buf = f.read(carve_result.size)
+
+			with open(output_file, 'wb') as out_f:
+				out_f.write(buf)
+
+			results.append(carve_result)
 
 	elif type(carve_result) is RegistryCarve.CarveResultCompressed:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer_decompressed), 'Unknown', carve_result.filename))

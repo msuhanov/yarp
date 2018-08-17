@@ -13,7 +13,7 @@ from struct import unpack
 from collections import namedtuple
 
 CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'hbins_data_size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
-CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start' ])
+CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start', 'suggested_margin_rounded', 'suggested_margin' ])
 
 CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
 CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
@@ -154,6 +154,63 @@ def ValidateRandomFragment(Buffer, AllowNullBytesOnly):
 
 	return False
 
+def ValidateRandomCells(Buffer, OldCells = False):
+	"""Check if Buffer contains plausible cells, return an offset pointing to the start of cells (or None).
+	This function is used to detect a margin of a registry fragment.
+	"""
+
+	def Walk(Buffer, OldCells):
+		def ValidateLargeCell(Buffer):
+			if len(Buffer) < 72:
+				return True
+
+			cnt = 0
+			offset = 16
+			while offset < len(Buffer):
+				if Buffer[offset : offset + 4] in [ b'\xFF\xFFnk', b'\xFF\xFFvk' ]:
+					cnt += 1
+
+				offset += 2
+
+			return cnt <= 3
+
+		if len(Buffer) < 8:
+			return False
+
+		offset = 0
+		while True:
+			four_bytes = Buffer[offset : offset + 4]
+			if len(four_bytes) != 4:
+				break
+
+			cell_size, = unpack('<l', four_bytes)
+			cell_size_abs = abs(cell_size)
+
+			if OldCells:
+				cell_size_alignment = 16
+			else:
+				cell_size_alignment = 8
+
+			if cell_size_abs < cell_size_alignment or cell_size_abs % cell_size_alignment != 0 or offset + cell_size_abs > len(Buffer) or cell_size_abs > CELL_SIZE_MAX:
+				return False
+
+			cell = Buffer[offset : offset + cell_size_abs]
+			if not ValidateLargeCell(cell):
+				return False
+
+			offset += cell_size_abs
+
+		return offset == len(Buffer)
+
+	offset = 0
+	while offset < len(Buffer):
+		if Walk(Buffer[offset: ], OldCells):
+			return offset
+
+		offset += 8
+
+	return
+
 class DiskImage(object):
 	"""This class is used to read from a disk image (or a similar source that is aligned to 512 bytes)."""
 
@@ -190,10 +247,12 @@ class Carver(DiskImage):
 
 		self.progress_callback(bytes_read, bytes_total)
 
-	def carve(self, recover_fragments = False, ntfs_decompression = False):
+	def carve(self, recover_fragments = False, ntfs_decompression = False, suggest_margin = False):
 		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment).
 		When 'ntfs_decompression' is True, data from compression units (NTFS) will be also recovered, this will yield
 		CarveResultCompressed and, if 'recover_fragments' is also True, CarveResultFragmentCompressed named tuples.
+		When 'suggest_margin' is True, set the 'suggested_margin' field for each CarveResultFragment named tuple (if a margin size
+		can be guessed).
 		Note:
 		Only the first bytes of each sector will be scanned for signatures, because registry files (primary) are always larger than
 		an NTFS file record (a primary file is at least 8192 bytes in length, while a file record is 1024 or 4096 bytes in length),
@@ -203,6 +262,7 @@ class Carver(DiskImage):
 		compressed_regf_fragments = []
 
 		pos = 0
+		prev_result_end_pos = 0
 		file_size = self.size()
 		while pos < file_size:
 			self.call_progress_callback(pos, file_size)
@@ -289,6 +349,7 @@ class Carver(DiskImage):
 					else:
 						pos += regf_size + SECTOR_SIZE - regf_size % SECTOR_SIZE
 
+					prev_result_end_pos = pos
 					continue
 
 			elif four_bytes == b'hbin' and recover_fragments:
@@ -332,9 +393,45 @@ class Carver(DiskImage):
 					if fragment_size == 0:
 						fragment_size = SECTOR_SIZE # Something is wrong with the hive bin in a fragment (like a format violation).
 
-					yield CarveResultFragment(offset = fragment_offset, size = fragment_size, hbin_start = fragment_hbin_start)
+					suggested_margin = None
+					suggested_margin_rounded = None
+					if suggest_margin:
+						# Check the preceding bytes (at most 16 sectors) for a possible margin.
+						margin_check_size = fragment_offset - prev_result_end_pos
+						if margin_check_size > 16 * SECTOR_SIZE:
+							margin_check_size = 16 * SECTOR_SIZE
+						else:
+							margin_check_size = margin_check_size // SECTOR_SIZE * SECTOR_SIZE
+
+						if margin_check_size > 0 and fragment_hbin_start > 0:
+							margin_buf = self.read(fragment_offset - margin_check_size, margin_check_size)
+							if len(margin_buf) == margin_check_size:
+								offset_in_margin_buf = ValidateRandomCells(margin_buf)
+								if offset_in_margin_buf is None:
+									# No margin.
+									suggested_margin = 0
+									suggested_margin_rounded = 0
+								else:
+									# A margin is present.
+									suggested_margin = margin_check_size - offset_in_margin_buf
+									suggested_margin_rounded = margin_check_size - (offset_in_margin_buf // SECTOR_SIZE * SECTOR_SIZE)
+									if suggested_margin_rounded + 32 > fragment_hbin_start:
+										# A margin is too large, give up.
+										suggested_margin = 0
+										suggested_margin_rounded = 0
+							else:
+								# A read error, give up.
+								suggested_margin = 0
+								suggested_margin_rounded = 0
+						else:
+							# Obviously, there is no margin.
+							suggested_margin = 0
+							suggested_margin_rounded = 0
+
+					yield CarveResultFragment(offset = fragment_offset, size = fragment_size, hbin_start = fragment_hbin_start, suggested_margin_rounded = suggested_margin_rounded, suggested_margin = suggested_margin)
 
 					pos += fragment_size
+					prev_result_end_pos = pos
 					continue
 
 			elif ntfs_decompression:
@@ -414,6 +511,8 @@ class Carver(DiskImage):
 							compressed_regf_fragments.extend(regf_fragments[False])
 							yield result_2
 
+					prev_result_end_pos = pos + SECTOR_SIZE # This is an assumed position.
+
 				elif recover_fragments and RegistryHelpers.NTFSCheckCompressedSignature(seven_bytes, b'hbin'):
 					if pos not in compressed_regf_fragments:
 						# Not a known fragment of a compressed primary file.
@@ -429,6 +528,8 @@ class Carver(DiskImage):
 
 								yield CarveResultFragmentCompressed(offset = fragment_offset, buffer_decompressed = buf_decompressed,
 									hbin_start = check_result_hbin.offset_relative)
+
+								prev_result_end_pos = pos + SECTOR_SIZE # This is an assumed position.
 
 			pos += SECTOR_SIZE
 

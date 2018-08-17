@@ -1534,3 +1534,58 @@ def FragmentTranslator(file_object, effective_version = 5):
 
 	# We are done.
 	return truncated_primary_file_object
+
+def FragmentWithMarginTranslator(file_object, margin_size):
+	"""This function is used to translate a hive bins fragment with a margin (as a file object) to a new hive bins fragment with that margin rebuilt to a new hive bin (as a BytesIO object).
+	The BytesIO object is then returned. The 'margin_size' should be a positive integer (aligned to 8 bytes). The new cell format is assumed.
+	"""
+
+	if margin_size < 8 or margin_size % 8 != 0:
+		raise ValueError('Invalid margin size')
+
+	reg_file_old = RegistryFile(file_object)
+
+	signature = reg_file_old.read_binary(margin_size, 4)
+	if signature != b'hbin':
+		raise HiveBinException('Invalid signature: {}'.format(signature))
+
+	base_offset = reg_file_old.read_uint32(margin_size + 4)
+	if base_offset > 0 and base_offset % HIVE_BIN_SIZE_ALIGNMENT != 0:
+		raise HiveBinException('Invalid base offset: {}'.format(base_offset))
+
+	# Read the margin and the fragment.
+	file_object.seek(0)
+	margin_buf = file_object.read(margin_size)
+	fragment_buf = file_object.read()
+
+	if len(margin_buf) != margin_size:
+		raise ValueError('Invalid margin size, expected: {} bytes, read: {} bytes'.format(margin_size, len(margin_buf)))
+
+	margin_size_effective = margin_size + 32 + 8 # The margin, plus the header of a hive bin, plus the smallest dummy cell possible.
+	margin_size_effective_aligned = margin_size_effective + HIVE_BIN_SIZE_ALIGNMENT - margin_size_effective % HIVE_BIN_SIZE_ALIGNMENT
+
+	if margin_size_effective_aligned > base_offset:
+		raise ValueError('Margin data is too large for this base offset: {} < {}'.format(base_offset, margin_size))
+
+	allocation_size = margin_size_effective_aligned + len(fragment_buf)
+	new_fragment_object = BytesIO(b'\x00' * allocation_size)
+
+	# Copy them to the right locations.
+	new_fragment_object.seek(margin_size_effective_aligned)
+	new_fragment_object.write(fragment_buf)
+	new_fragment_object.seek(margin_size_effective_aligned - margin_size)
+	new_fragment_object.write(margin_buf)
+
+	reg_file_new = RegistryFile(new_fragment_object)
+
+	# Write a new hive bin with a dummy cell.
+	reg_file_new.write_binary(0, b'hbin')
+	reg_file_new.write_uint32(4, base_offset - margin_size_effective_aligned)
+	reg_file_new.write_uint32(8, margin_size_effective_aligned)
+	reg_file_new.write_uint32(32, margin_size_effective_aligned - 32 - margin_size)
+
+	# Write the 'RBLT' signature to the dummy cell.
+	reg_file_new.write_binary(36, b'RBLT')
+
+	# We are done.
+	return new_fragment_object

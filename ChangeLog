@@ -1,3 +1,11 @@
+Version: 1.0.21
+
+RegistryCarve: report a margin of each registry fragment (if requested).
+RegistryFile: add a function to rebuild a margin of a registry fragment to a new hive bin.
+yarp-carver: rebuild a registry fragment if it contains a margin (if requested).
+
+---
+
 Version: 1.0.20
 
 RegistryFile: handle truncated remnant log entries.

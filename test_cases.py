@@ -79,6 +79,14 @@ log_with_remnant_data = path.join(HIVES_DIR, 'OldLogWithRemnantData')
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
+
+hive_carving_margin0_1 = path.join(HIVES_DIR, 'Carving', 'Margin0_1')
+hive_carving_margin0_2 = path.join(HIVES_DIR, 'Carving', 'Margin0_2')
+hive_carving_margin512_1 = path.join(HIVES_DIR, 'Carving', 'Margin512_1')
+hive_carving_margin512_2 = path.join(HIVES_DIR, 'Carving', 'Margin512_2')
+hive_carving_margin3584 = path.join(HIVES_DIR, 'Carving', 'Margin3584')
+hive_carving_margin_mixed = path.join(HIVES_DIR, 'Carving', 'MarginMixed')
+
 hive_carving_compressed = path.join(HIVES_DIR, 'Carving', 'NTFSCompressed')
 hive_carving_compressed_noslack = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlack')
 hive_carving_compressed_noslack_1024 = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlackCluster1024')
@@ -88,6 +96,10 @@ hive_recon_3 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruct
 hive_recon_4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction4')
 hive_recon_2plus1 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2plus1')
 hive_recon_2and4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2and4')
+
+hive_marg_recon_1 = path.join(HIVES_DIR, 'Carving', 'MarginRebuild', 'Rebuild512_4096')
+hive_marg_recon_2 = path.join(HIVES_DIR, 'Carving', 'MarginRebuild', 'Rebuild512_24576')
+hive_marg_recon_3 = path.join(HIVES_DIR, 'Carving', 'MarginRebuild', 'Rebuild3584_4096')
 
 hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
@@ -924,6 +936,127 @@ def test_carving(recover_fragments):
 				assert False
 
 			c += 1
+
+	with open(hive_carving_margin0_1, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == 0 and i.suggested_margin_rounded == 0
+
+			f.seek(i.size - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+			with pytest.raises(ValueError):
+				RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+
+			c += 1
+
+		assert c == 2
+
+	with open(hive_carving_margin0_2, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == 0 and i.suggested_margin_rounded == 0
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+			with pytest.raises(ValueError):
+				RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_carving_margin512_1, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == 456 and i.suggested_margin_rounded == 512
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+			dst_obj = RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+			dst_buf = dst_obj.getvalue()[ 4096 : 4096 + i.size ]
+
+			assert src_buf[ i.suggested_margin : ] == dst_buf
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_carving_margin512_2, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == 512 and i.suggested_margin_rounded == 512
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+			dst_obj = RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+			dst_buf = dst_obj.getvalue()[ 4096 : 4096 + i.size ]
+
+			assert src_buf[ i.suggested_margin : ] == dst_buf
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_carving_margin3584, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == 3560 and i.suggested_margin_rounded == 3584
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+			dst_obj = RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+			dst_buf = dst_obj.getvalue()[ 4096 : 4096 + i.size ]
+
+			assert src_buf[ i.suggested_margin : ] == dst_buf
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_carving_margin_mixed, 'rb') as f:
+		margins = [ 456, 0, 0, 3560 ]
+		margins_rounded = [ 512, 0, 0, 3584 ]
+
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert type(i) is RegistryCarve.CarveResultFragment
+			assert i.suggested_margin == margins.pop(0)
+			assert i.suggested_margin_rounded == margins_rounded.pop(0)
+
+			if i.suggested_margin > 0:
+				f.seek(i.offset - i.suggested_margin)
+				src_buf = f.read(i.size + i.suggested_margin)
+				src_obj = BytesIO(src_buf)
+				dst_obj = RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin)
+				dst_buf = dst_obj.getvalue()[ 4096 : 4096 + i.size ]
+
+				assert src_buf[ i.suggested_margin : ] == dst_buf
+
+			c += 1
+
+		assert c == 4
 
 @pytest.mark.parametrize('recover_fragments', [False, True])
 def test_compressed_carving(recover_fragments):
@@ -2097,6 +2230,70 @@ def test_translator():
 			c += 1
 
 		assert c == 2
+
+def test_translator_with_margin():
+	with open(hive_marg_recon_1, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert i.offset - i.suggested_margin_rounded == 0
+			assert i.suggested_margin_rounded == 512
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+
+			hive_obj = RegistryFile.FragmentTranslator(RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin))
+			hive = Registry.RegistryHiveTruncated(hive_obj)
+			for item in hive.scan():
+				pass
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_marg_recon_2, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert i.offset - i.suggested_margin_rounded == 0
+			assert i.suggested_margin_rounded == 512
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+
+			hive_obj = RegistryFile.FragmentTranslator(RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin))
+			hive = Registry.RegistryHiveTruncated(hive_obj)
+			for item in hive.scan():
+				pass
+
+			c += 1
+
+		assert c == 1
+
+	with open(hive_marg_recon_3, 'rb') as f:
+		carver = RegistryCarve.Carver(f)
+
+		c = 0
+		for i in carver.carve(True, True, True):
+			assert i.offset - i.suggested_margin_rounded == 0
+			assert i.suggested_margin_rounded == 3584
+
+			f.seek(i.offset - i.suggested_margin)
+			src_buf = f.read(i.size + i.suggested_margin)
+			src_obj = BytesIO(src_buf)
+
+			hive_obj = RegistryFile.FragmentTranslator(RegistryFile.FragmentWithMarginTranslator(src_obj, i.suggested_margin))
+			hive = Registry.RegistryHiveTruncated(hive_obj)
+			for item in hive.scan():
+				pass
+
+			c += 1
+
+		assert c == 1
 
 def test_invalid_parent_fragment():
 	with open(fragment_invalid_parent, 'rb') as f:
