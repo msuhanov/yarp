@@ -1565,7 +1565,7 @@ def FragmentWithMarginTranslator(file_object, margin_size):
 	margin_size_effective_aligned = margin_size_effective + HIVE_BIN_SIZE_ALIGNMENT - margin_size_effective % HIVE_BIN_SIZE_ALIGNMENT
 
 	if margin_size_effective_aligned > base_offset:
-		raise ValueError('Margin data is too large for this base offset: {} < {}'.format(base_offset, margin_size))
+		raise ValueError('Margin data (aligned) is too large for this base offset: {} < {}'.format(base_offset, margin_size_effective_aligned))
 
 	allocation_size = margin_size_effective_aligned + len(fragment_buf)
 	new_fragment_object = BytesIO(b'\x00' * allocation_size)

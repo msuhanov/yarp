@@ -91,6 +91,14 @@ hive_carving_compressed = path.join(HIVES_DIR, 'Carving', 'NTFSCompressed')
 hive_carving_compressed_noslack = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlack')
 hive_carving_compressed_noslack_1024 = path.join(HIVES_DIR, 'Carving', 'NTFSCompressedNoSlackCluster1024')
 
+hive_memcarving_0 = path.join(HIVES_DIR, 'MemoryCarving', 'Fragment_0')
+hive_memcarving_1 = path.join(HIVES_DIR, 'MemoryCarving', 'Fragment_1')
+hive_memcarving_3 = path.join(HIVES_DIR, 'MemoryCarving', 'Fragment_3')
+hive_memcarving_2fragments = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragments')
+hive_memcarving_2fragments_gap = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragmentsWithGap')
+hive_memcarving_2fragments_gap2 = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragmentsWithGap2')
+hive_memcarving_hbin_compressed = path.join(HIVES_DIR, 'MemoryCarving', 'HiveBinCompressed')
+
 hive_recon_2 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2')
 hive_recon_3 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction3')
 hive_recon_4 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction4')
@@ -2563,3 +2571,290 @@ def test_key_security():
 		descriptor = hive.root_key().security().descriptor()
 		secinfo = RegistryHelpers.ParseSecurityDescriptorRelative(descriptor)
 		assert secinfo.owner_sid == 'S-1-5-32-544'
+
+def test_lz77():
+	assert RegistryHelpers.LZ77DecompressBuffer(b'') == (b'', True, 0)
+	assert RegistryHelpers.LZ77DecompressBuffer(b'1') == (b'', True, 0)
+	assert RegistryHelpers.LZ77DecompressBuffer(b'12') == (b'', True, 0)
+	assert RegistryHelpers.LZ77DecompressBuffer(b'123') == (b'', True, 0)
+	assert RegistryHelpers.LZ77DecompressBuffer(b'1234') == (b'', True, 4)
+
+	compressed_data = b'\x3F\x00\x00\x00\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6A\x6B\x6C\x6D\x6E\x6F\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7A'
+	decompressed_data = b'abcdefghijklmnopqrstuvwxyz'
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data) == (decompressed_data, False, len(compressed_data))
+
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\x00') == (decompressed_data, True, len(compressed_data))
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF') == (decompressed_data, True, len(compressed_data))
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 2)
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 3)
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 4)
+
+	compressed_data = b'\xFF\xFF\xFF\x1F\x61\x62\x63\x17\x00\x0F\xFF\x26\x01'
+	decompressed_data = b'abc' * 100
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data) == (decompressed_data, False, len(compressed_data))
+
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\x00') == (decompressed_data, True, len(compressed_data))
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF') == (decompressed_data, True, len(compressed_data))
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 2)
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 2)
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 2)
+	assert RegistryHelpers.LZ77DecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF\xFF') == (decompressed_data, True, len(compressed_data) + 2)
+
+	assert RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'hbin')
+	assert RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'hbi')
+	assert RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'hb')
+	assert RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'h')
+	assert not RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'hbin1234')
+
+def test_lz77huffman():
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'') == (b'', True, 0)
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'1') == (b'', True, 0)
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'12') == (b'', True, 0)
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'123') == (b'', True, 0)
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'1234') == (b'', True, 0)
+
+	compressed_data = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x50\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x45\x44\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x52\x3e\xd7\x94\x11\x5b\xe9\x19\x5f\xf9\xd6\x7c\xdf\x8d\x04\x00\x00\x00\x00'
+	decompressed_data = b'abcdefghijklmnopqrstuvwxyz'
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data) == (decompressed_data, False, len(compressed_data))
+
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\x00') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+
+	compressed_data = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x30\x23\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xa8\xdc\x00\x00\xff\x26\x01'
+	decompressed_data = b'abc' * 100
+
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data) == (decompressed_data, False, len(compressed_data))
+
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\x00') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF\xFF') == (decompressed_data, False, len(compressed_data))
+
+	a = RegistryHelpers.LZ77HuffmanDecompressBuffer(compressed_data + b'\xFF\xFF\xFF\xFF\xFF', True)
+	assert a[0].startswith(decompressed_data)
+	assert a[1]
+
+def test_memcarving():
+	with open(hive_memcarving_0, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			assert i.offset == 0
+			assert len(i.buffer) == 28672
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 1
+
+	with open(hive_memcarving_1, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			assert i.offset == 1
+			assert len(i.buffer) == 28672
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 1
+
+	with open(hive_memcarving_1, 'rb') as f:
+		d = f.read()
+
+		carver = RegistryCarve.MemoryCarver(d)
+		assert carver.fileno is None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			assert i.offset == 1
+			assert len(i.buffer) == 28672
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 1
+
+	with open(hive_memcarving_3, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			assert i.offset == 3
+			assert len(i.buffer) == 28157
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 1
+
+	with open(hive_memcarving_3, 'rb') as f:
+		d = f.read()
+
+		carver = RegistryCarve.MemoryCarver(d)
+		assert carver.fileno is None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			assert i.offset == 3
+			assert len(i.buffer) == 28157
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 1
+
+	with open(hive_memcarving_2fragments, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+
+			if c == 1:
+				assert i.offset == 2 and len(i.buffer) == 510
+			elif c == 2:
+				assert i.offset == 512 and len(i.buffer) == 28672
+
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 2
+
+	with open(hive_memcarving_2fragments_gap, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+
+			if c == 1:
+				assert i.offset == 2 and len(i.buffer) == 511
+			elif c == 2:
+				assert i.offset == 513 and len(i.buffer) == 28672
+
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 2
+
+	with open(hive_duplicate_subkeys, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+			if c == 1:
+				assert i.offset == 4096
+				assert i.hbin_start == 0
+				assert len(i.buffer) == 32 * 4096
+				assert not i.compressed
+			elif c == 2:
+				assert i.offset == 4096 + 32 * 4096
+				assert i.hbin_start == 32 * 4096
+				assert len(i.buffer) == 32 * 4096
+				assert not i.compressed
+			elif c == 3:
+				assert i.offset == 4096 + 64 * 4096
+				assert i.hbin_start == 64 * 4096
+				assert len(i.buffer) == 32 * 4096
+				assert not i.compressed
+			elif c == 4:
+				assert i.offset == 4096 + 96 * 4096
+				assert i.hbin_start == 96 * 4096
+				assert len(i.buffer) > 0 and len(i.buffer) < 32 * 4096
+				assert not i.compressed
+
+		assert c == 4
+
+	with open(hive_memcarving_2fragments_gap2, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+
+			if c == 1:
+				assert i.offset == 2 and len(i.buffer) == 512
+			elif c == 2:
+				assert i.offset == 514 and len(i.buffer) == 28672
+
+			assert i.hbin_start == 0
+			assert not i.compressed
+
+		assert c == 2
+
+	with open(hive_memcarving_hbin_compressed, 'rb') as f:
+		carver = RegistryCarve.MemoryCarver(f)
+		assert carver.fileno is not None
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+
+			assert i.offset == 0 and len(i.buffer) == 4096
+			assert i.hbin_start == 0
+			assert i.compressed
+
+		assert c == 1
+
+	def prepare_compressed_image(gap_size):
+		with open(hive_memcarving_0, 'rb') as f:
+			normal_data = f.read()
+
+		with open(hive_memcarving_hbin_compressed, 'rb') as f:
+			compressed_data = f.read()
+
+		f = BytesIO()
+		f.write(normal_data)
+
+		if gap_size > 0:
+			f.write(b'\x00' * gap_size)
+
+		f.write(compressed_data)
+
+		return f
+
+	k = 0
+	for gap_size in [ 0, 1, 2, 3, 15, 16, 17 ]:
+		f = prepare_compressed_image(gap_size)
+
+		carver = RegistryCarve.MemoryCarver(f)
+
+		c = 0
+		for i in carver.carve():
+			c += 1
+
+			if c == 1:
+				assert i.offset == 0
+				assert len(i.buffer) == 28672
+				assert i.hbin_start == 0
+				assert not i.compressed
+			elif c == 2:
+				assert i.offset == 28672 + gap_size
+				assert len(i.buffer) == 4096
+				assert i.hbin_start == 0
+				assert i.compressed
+
+
+		if gap_size % 16 != 0:
+			assert c == 1
+		else:
+			assert c == 2
+			k += 1
+
+	assert k == 2

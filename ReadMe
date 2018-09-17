@@ -31,7 +31,14 @@ See the 'License' file.
 
 5. Installation
 
-# pip3 install https://github.com/msuhanov/yarp/archive/1.0.21.tar.gz
+# pip3 install https://github.com/msuhanov/yarp/archive/1.0.22.tar.gz
+
+6. Known issues
+
+- Issue: the UnicodeEncodeError exception is raised when redirecting the
+output of a tool (Windows only).
+- Solution: execute the "set PYTHONIOENCODING=utf-8" command before running
+a tool (in the same CMD session).
 
 ---
 (c) Maxim Suhanov

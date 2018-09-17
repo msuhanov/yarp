@@ -528,3 +528,374 @@ def ParseSecurityDescriptorRelative(Buffer):
 	owner_sid = ParseSID(Buffer[p_owner : ])
 
 	return SecurityInfo(owner_sid = owner_sid)
+
+def LZ77DecompressBuffer(Buffer):
+	"""Decompress data from Buffer using the plain LZ77 algorithm, return the (decompressed_data, is_bogus_data, bytes_processed) tuple.
+	If the 'is_bogus_data' item is set to True in that tuple, the 'decompressed_data' item contains partial data.
+	The 'bytes_processed' item contains a number of bytes consumed during the decompression.
+	"""
+
+	def is_valid_write_request(offset):
+		return offset < 2*1024*1024*1024 # Reject obviously invalid write requests.
+
+	OutputObject = BytesIO()
+
+	BufferedFlags = 0
+	BufferedFlagCount = 0
+	InputPosition = 0
+	OutputPosition = 0
+	LastLengthHalfByte = 0
+
+	while True:
+		if BufferedFlagCount == 0:
+			BufferedFlags = Buffer[InputPosition : InputPosition + 4]
+
+			if len(BufferedFlags) != 4:
+				# Bogus data.
+				break
+
+			BufferedFlags, = unpack('<L', BufferedFlags)
+
+			InputPosition += 4
+			BufferedFlagCount = 32
+
+		BufferedFlagCount -= 1
+		if BufferedFlags & (1 << BufferedFlagCount) == 0:
+			try:
+				OneByte = Buffer[InputPosition]
+			except IndexError:
+				# Bogus data.
+				break
+
+			if type(OneByte) is not int:
+				OneByte = ord(OneByte)
+
+			OneByte = bytearray([OneByte])
+
+			if is_valid_write_request(OutputPosition):
+				OutputObject.seek(OutputPosition)
+				OutputObject.write(OneByte)
+			else:
+				# Bogus data.
+				break
+
+			InputPosition += 1
+			OutputPosition += 1
+		else:
+			if InputPosition == len(Buffer):
+				# We are done.
+				OutputBuffer = OutputObject.getvalue()
+				OutputObject.close()
+
+				return (OutputBuffer, False, InputPosition)
+
+			MatchBytes = Buffer[InputPosition : InputPosition + 2]
+			if len(MatchBytes) != 2:
+				# Bogus data.
+				break
+
+			MatchBytes, = unpack('<H', MatchBytes)
+
+			InputPosition += 2
+			MatchLength = MatchBytes % 8
+			MatchOffset = (MatchBytes // 8) + 1
+			if MatchLength == 7:
+				if LastLengthHalfByte == 0:
+					try:
+						MatchLength = Buffer[InputPosition]
+					except IndexError:
+						# Bogus data.
+						break
+
+					if type(MatchLength) is not int:
+						MatchLength = ord(MatchLength)
+
+					MatchLength = MatchLength % 16
+					LastLengthHalfByte = InputPosition
+					InputPosition += 1
+				else:
+					try:
+						MatchLength = Buffer[LastLengthHalfByte]
+					except IndexError:
+						# Bogus data.
+						break
+
+					if type(MatchLength) is not int:
+						MatchLength = ord(MatchLength)
+
+					MatchLength = MatchLength // 16
+					LastLengthHalfByte = 0
+
+				if MatchLength == 15:
+					try:
+						MatchLength = Buffer[InputPosition]
+					except IndexError:
+						# Bogus data.
+						break
+
+					if type(MatchLength) is not int:
+						MatchLength = ord(MatchLength)
+
+					InputPosition += 1
+					if MatchLength == 255:
+						MatchLength = Buffer[InputPosition : InputPosition + 2]
+						if len(MatchLength) != 2:
+							# Bogus data.
+							break
+
+						MatchLength, = unpack('<H', MatchLength)
+						InputPosition += 2
+						if MatchLength < 15 + 7:
+							# Bogus data.
+							break
+
+						MatchLength -= (15 + 7)
+
+					MatchLength += 15
+
+				MatchLength += 7
+
+			MatchLength += 3
+
+			bogus_data = False
+			for i in range(0, MatchLength):
+				if OutputPosition - MatchOffset < 0:
+					# Bogus data.
+					bogus_data = True
+					break
+
+				OutputObject.seek(OutputPosition - MatchOffset)
+				OneByte = OutputObject.read(1)
+
+				if len(OneByte) != 1:
+					# Bogus data.
+					bogus_data = True
+					break
+
+				if is_valid_write_request(OutputPosition):
+					OutputObject.seek(OutputPosition)
+					OutputObject.write(OneByte)
+				else:
+					# Bogus data.
+					bogus_data = True
+					break
+
+				OutputPosition += 1
+
+			if bogus_data:
+				break
+
+	# We are done (but data is bogus).
+	OutputBuffer = OutputObject.getvalue()
+	OutputObject.close()
+
+	return (OutputBuffer, True, InputPosition)
+
+def LZ77CheckCompressedSignature(Buffer, Signature):
+	"""Check if Buffer (a compressed block of data) contains a given signature (which cannot be compressed using the plain LZ77 algorithm)."""
+
+	if len(Signature) == 0 or len(Signature) > 32:
+		return False # Invalid signature.
+
+	if len(Buffer) < 4 + len(Signature):
+		return False # Truncated buffer.
+
+	first_bytes = Buffer[ : 4 + len(Signature)]
+	if first_bytes.endswith(Signature):
+		flags, = unpack('<L', Buffer[ : 4])
+		return flags >> (32 - len(Signature)) == 0
+
+	return False
+
+def LZ77HuffmanDecompressBuffer(Buffer, CompatibilityMode = False):
+	"""Decompress data from Buffer using the LZ77+Huffman algorithm, return the (decompressed_data, is_bogus_data, bytes_processed) tuple.
+	If the 'is_bogus_data' item is set to True in that tuple, the 'decompressed_data' item contains partial data.
+	The 'bytes_processed' item contains a number of bytes consumed during the decompression.
+	When 'CompatibilityMode' is True, do the RtlDecompressBufferEx()-like decompression.
+	"""
+
+	def is_valid_write_request():
+		return OutputObject.tell() < 2*1024*1024*1024 # Reject obviously invalid write requests.
+
+	def Read16Bits(Position):
+		TwoBytes = Buffer[Position : Position + 2]
+		if len(TwoBytes) != 2:
+			return
+
+		NextBits, = unpack('<H', TwoBytes)
+		return NextBits
+
+	DecodingTable = dict()
+
+	CurrentTableEntry = 0
+	for BitLength in range(1, 16):
+		for Symbol in range(0, 512):
+			try:
+				SymbolInBuffer = Buffer[Symbol // 2]
+			except IndexError:
+				# Bogus Huffman codes.
+				return (b'', True, 0)
+
+			if type(SymbolInBuffer) is not int:
+				SymbolInBuffer = ord(SymbolInBuffer)
+
+			if (Symbol % 2 == 0 and SymbolInBuffer & 0xF == BitLength) or (Symbol % 2 != 0 and SymbolInBuffer >> 4 == BitLength):
+				EntryCount = 1 << (15 - BitLength)
+				for i in range(0, EntryCount):
+					if CurrentTableEntry >= 2 ** 15:
+						# Bogus Huffman codes.
+						return (b'', True, 0)
+
+					DecodingTable[CurrentTableEntry] = Symbol
+					CurrentTableEntry += 1
+
+	if CurrentTableEntry != 2 ** 15:
+		# Bogus Huffman codes.
+		return (b'', True, 0)
+
+	OutputObject = BytesIO()
+
+	CurrentPosition = 256
+	NextBits = Read16Bits(CurrentPosition)
+	if NextBits is None:
+		# Bogus data.
+		return (b'', True, CurrentPosition)
+
+	CurrentPosition += 2
+	NextBits = NextBits << 16
+
+	MoreBits = Read16Bits(CurrentPosition)
+	if MoreBits is None:
+		# Bogus data.
+		return (b'', True, CurrentPosition)
+
+	NextBits = NextBits | MoreBits
+	CurrentPosition += 2
+
+	ExtraBits = 16
+
+	while True:
+		Next15Bits = NextBits >> (32 - 15)
+		try:
+			HuffmanSymbol = DecodingTable[Next15Bits]
+		except KeyError:
+			# Bogus data.
+			break
+
+		HuffmanSymbolInBuffer = Buffer[HuffmanSymbol // 2]
+		if type(HuffmanSymbolInBuffer) is not int:
+			HuffmanSymbolInBuffer = ord(HuffmanSymbolInBuffer)
+
+		if HuffmanSymbol % 2 == 0:
+			HuffmanSymbolBitLength = HuffmanSymbolInBuffer & 0xF
+		else:
+			HuffmanSymbolBitLength = HuffmanSymbolInBuffer >> 4
+
+		NextBits = (NextBits << HuffmanSymbolBitLength) & 0xFFFFFFFF
+		ExtraBits -= HuffmanSymbolBitLength
+		if ExtraBits < 0:
+			MoreBits = Read16Bits(CurrentPosition)
+			if MoreBits is None:
+				# Bogus data.
+				break
+
+			NextBits = (NextBits | (MoreBits << abs(ExtraBits))) & 0xFFFFFFFF
+			ExtraBits += 16
+			CurrentPosition += 2
+
+		if HuffmanSymbol < 256:
+			OneByte = bytearray([HuffmanSymbol])
+			if is_valid_write_request():
+				OutputObject.write(OneByte)
+			else:
+				# Bogus data.
+				break
+
+		elif HuffmanSymbol == 256 and ((CompatibilityMode and CurrentPosition >= len(Buffer)) or not CompatibilityMode):
+			# We are done.
+			OutputBuffer = OutputObject.getvalue()
+			OutputObject.close()
+			return (OutputBuffer, False, CurrentPosition)
+		else:
+			HuffmanSymbol -= 256
+			MatchLength = HuffmanSymbol % 16
+			MatchOffsetBitLength = HuffmanSymbol // 16
+
+			if MatchLength == 15:
+				try:
+					MatchLength = Buffer[CurrentPosition]
+				except IndexError:
+					# Bogus data.
+					break
+
+				if type(MatchLength) is not int:
+					MatchLength = ord(MatchLength)
+
+				CurrentPosition += 1
+
+				if MatchLength == 255:
+					MatchLength = Read16Bits(CurrentPosition)
+					if MatchLength is None:
+						# Bogus data.
+						break
+
+					CurrentPosition += 2
+
+					if MatchLength < 15:
+						# Bogus data.
+						break
+
+					MatchLength -= 15
+
+				MatchLength += 15
+
+			MatchLength += 3
+
+			MatchOffset = NextBits >> (32 - MatchOffsetBitLength)
+			MatchOffset += (1 << MatchOffsetBitLength)
+			NextBits = (NextBits << MatchOffsetBitLength) & 0xFFFFFFFF
+			ExtraBits -= MatchOffsetBitLength
+
+			if ExtraBits < 0:
+				MoreBits = Read16Bits(CurrentPosition)
+				if MoreBits is None:
+					# Bogus data.
+					break
+
+				NextBits = (NextBits | (MoreBits << abs(ExtraBits))) & 0xFFFFFFFF
+				ExtraBits += 16
+				CurrentPosition += 2
+
+			CurrentOutputPosition = OutputObject.tell()
+
+			bogus_data = False
+			for i in range(0, MatchLength):
+				if CurrentOutputPosition - MatchOffset + i < 0:
+					# Bogus data.
+					bogus_data = True
+					break
+
+				OutputObject.seek(CurrentOutputPosition - MatchOffset + i)
+				OneByte = OutputObject.read(1)
+				if len(OneByte) != 1:
+					# Bogus data.
+					bogus_data = True
+					break
+
+				OutputObject.seek(CurrentOutputPosition + i)
+
+				if is_valid_write_request():
+					OutputObject.write(OneByte)
+				else:
+					# Bogus data.
+					bogus_data = True
+					break
+
+			if bogus_data:
+				break
+
+	# We are done (but data is bogus).
+	OutputBuffer = OutputObject.getvalue()
+	OutputObject.close()
+
+	return (OutputBuffer, True, CurrentPosition)

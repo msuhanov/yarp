@@ -7,7 +7,7 @@ setup(
 	license = 'GPLv3',
 	packages = [ 'yarp' ],
 	provides = [ 'yarp' ],
-	scripts = [ 'yarp-carver', 'yarp-print', 'yarp-timeline', 'yarp-mount' ],
+	scripts = [ 'yarp-carver', 'yarp-memcarver', 'yarp-print', 'yarp-timeline', 'yarp-mount' ],
 	description = 'Yet another registry parser',
 	author = 'Maxim Suhanov',
 	author_email = 'no.spam.c@mail.ru',

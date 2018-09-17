@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+
+# yarp: yet another registry parser
+# (c) Maxim Suhanov
+
+from yarp import RegistryCarve, __version__
+import argparse
+from collections import namedtuple
+import os
+import sys
+
+PROGRAM_NAME = 'yarp-memcarver'
+PROGRAM_VERSION = __version__
+
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
+
+def parse_args():
+	"""Parse command line arguments and return a named tuple (Arguments)."""
+
+	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry fragments from a memory image or a similar source (e.g., a page file).', add_help = False, prefix_chars = '-')
+
+	group_main = parser.add_argument_group('Main arguments')
+	group_misc = parser.add_argument_group('Miscellaneous arguments')
+
+	group_main.add_argument('file', help = 'a memory image')
+	group_main.add_argument('outdir', help = 'an output directory')
+
+	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
+	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
+
+	parsed_args = parser.parse_args()
+
+	source_file = parsed_args.file
+	output_dir = parsed_args.outdir
+
+	return Arguments(source_file = source_file, output_dir = output_dir)
+
+def print_progress_carving(bytes_read, bytes_total):
+	print('Bytes read / Bytes total: {} / {}'.format(bytes_read, bytes_total), file = sys.stderr)
+
+args = parse_args()
+
+if not os.path.isdir(args.output_dir):
+	print('Output directory does not exist: {}'.format(args.output_dir), file = sys.stderr)
+	sys.exit(255)
+
+try:
+	f = open(args.source_file, 'rb')
+except (OSError, IOError):
+	print('Source file cannot be opened: {}'.format(args.source_file), file = sys.stderr)
+	sys.exit(255)
+
+carver = RegistryCarve.MemoryCarver(f)
+carver.progress_callback = print_progress_carving
+
+print('Offset\tFragment size\tCompressed')
+for carve_result in carver.carve():
+		print('{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer), carve_result.compressed))
+
+		if not carve_result.compressed:
+			output_filename = '{}-fragment'.format(carve_result.offset)
+		else:
+			output_filename = '{}-compressed_fragment'.format(carve_result.offset)
+
+		output_file = os.path.join(args.output_dir, output_filename)
+		with open(output_file, 'wb') as out_f:
+			out_f.write(carve_result.buffer)
+
+f.close()

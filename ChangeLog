@@ -1,3 +1,12 @@
+Version: 1.0.22
+
+RegistryHelpers: add functions to work with compressed data (plain LZ77 and LZ77+Huffman).
+RegistryCarve: implement the carver to deal with memory images.
+New tool: yarp-memcarver.
+Minor changes.
+
+---
+
 Version: 1.0.21
 
 RegistryCarve: report a margin of each registry fragment (if requested).

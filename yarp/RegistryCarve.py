@@ -1,7 +1,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 #
-# This module implements an interface to carve registry hives (and fragments) from a disk image.
+# This module implements an interface to carve registry hives (and fragments) from a disk image (or a memory image).
 
 from __future__ import unicode_literals
 
@@ -11,6 +11,7 @@ from io import BytesIO
 import pickle
 from struct import unpack
 from collections import namedtuple
+import mmap
 
 CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'hbins_data_size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
 CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbin_start', 'suggested_margin_rounded', 'suggested_margin' ])
@@ -18,11 +19,14 @@ CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbi
 CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
 CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
 
+CarveResultMemory = namedtuple('CarveResultMemory', [ 'offset', 'buffer', 'hbin_start', 'compressed' ])
+
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
 HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
 CellsCheckResult = namedtuple('CellsCheckResult', [ 'are_valid', 'truncation_point_relative' ])
 
 SECTOR_SIZE = 512 # This is an assumed sector size.
+PAGE_SIZE = 4096 # This is a memory page size.
 FILE_MARGIN_SIZE = 4*1024*1024 # We will read more bytes than specified in the base block to account possible damage scenarios.
 FILE_SIZE_MAX_MIB = 500 # We do not expect a primary file to be larger than this (in MiB).
 CELL_SIZE_MAX = 2*1024*1024 # We do not expect a cell to be larger than this.
@@ -225,6 +229,52 @@ class DiskImage(object):
 		self.file_object.seek(pos)
 		return self.file_object.read(size)
 
+class MemoryImage(object):
+	"""This class is used to read from a memory image (including memory chunks from other sources).
+	In order to achieve better performance, a memory image (as a file object) is mapped (if possible) or read into the memory.
+	"""
+
+	fileno = None
+	file_object = None
+	mode = None
+
+	def __init__(self, file_object_or_bytes_object):
+		try:
+			file_object_or_bytes_object.read
+			file_object_or_bytes_object.seek
+		except AttributeError:
+			# This is a bytes object.
+			self.mode = 1
+			self.data = file_object_or_bytes_object
+			return
+
+		# This is a file object.
+		self.file_object = file_object_or_bytes_object
+
+		try:
+			self.fileno = self.file_object.fileno()
+			self.data = mmap.mmap(self.fileno, 0, access = mmap.ACCESS_READ)
+		except Exception:
+			self.mode = 3
+		else:
+			self.mode = 2
+
+	def size(self):
+		if self.mode == 2:
+			return self.data.size()
+		elif self.mode == 1:
+			return len(self.data)
+		else:
+			self.file_object.seek(0, 2)
+			return self.file_object.tell()
+
+	def read(self, pos, size):
+		if self.mode == 1 or self.mode == 2:
+			return self.data[pos : pos + size]
+		else:
+			self.file_object.seek(pos)
+			return self.file_object.read(size)
+
 class Carver(DiskImage):
 	"""This class is used to carve registry files (primary) and registry fragments from a disk image."""
 
@@ -251,8 +301,7 @@ class Carver(DiskImage):
 		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment).
 		When 'ntfs_decompression' is True, data from compression units (NTFS) will be also recovered, this will yield
 		CarveResultCompressed and, if 'recover_fragments' is also True, CarveResultFragmentCompressed named tuples.
-		When 'suggest_margin' is True, set the 'suggested_margin' field for each CarveResultFragment named tuple (if a margin size
-		can be guessed).
+		When 'suggest_margin' is True, set the 'suggested_margin' and 'suggested_margin_rounded' fields for each CarveResultFragment named tuple.
 		Note:
 		Only the first bytes of each sector will be scanned for signatures, because registry files (primary) are always larger than
 		an NTFS file record (a primary file is at least 8192 bytes in length, while a file record is 1024 or 4096 bytes in length),
@@ -1258,3 +1307,150 @@ class NTFSAwareCarver(DiskImage):
 						break
 
 					primary_object.close()
+
+class MemoryCarver(MemoryImage):
+	"""This class is used to carve registry fragments from a memory image (or a similar source: e.g., a page file)."""
+
+	progress_callback = None
+	"""A progress callback. Arguments: bytes_read, bytes_total."""
+
+	def __init__(self, file_object):
+		super(MemoryCarver, self).__init__(file_object)
+
+		self.callback_threshold = 1*1024*1024 # In bytes.
+
+	def call_progress_callback(self, bytes_read, bytes_total):
+		"""Call the progress callback, if defined."""
+
+		if self.progress_callback is None:
+			return
+
+		if bytes_read < self.callback_threshold or bytes_read % self.callback_threshold != 0:
+			return
+
+		self.progress_callback(bytes_read, bytes_total)
+
+	def carve(self):
+		"""This method yields named tuples (CarveResultMemory).
+		Notes: all possible offsets are tried in the image; only registry fragments (without their margins) are extracted.
+		"""
+
+		pos = 0
+		prev_result_end_pos = 0
+		file_size = self.size()
+		while pos < file_size:
+			self.call_progress_callback(pos, file_size)
+
+			buf = self.read(pos, PAGE_SIZE)
+			if len(buf) == 0: # End of a file or a read error.
+				break
+
+			if b'hbin' not in buf: # Do the quick check.
+				jump = len(buf) - 16
+				if jump > 0: # Jump over a useless buffer (minus some bytes to account possible compression).
+					pos += jump
+					continue
+
+			four_bytes = buf[ : 4]
+			eight_bytes = buf[ : 8]
+
+			if four_bytes == b'hbin':
+				buf = self.read(pos, 32 * PAGE_SIZE) # Read more memory pages (we will check if they are contiguous).
+
+				if len(buf) == 0: # End of a file or a read error.
+					break
+
+				check_result_hbin = CheckHiveBin(buf, None, True)
+				if check_result_hbin.is_valid:
+					hbin_buf = buf[ : check_result_hbin.size]
+					check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
+					if not check_result_cells.are_valid:
+						# The hive bin is truncated.
+						fragment_offset = pos
+						fragment_size = check_result_cells.truncation_point_relative
+						fragment_hbin_start = check_result_hbin.offset_relative
+
+						if fragment_size > 32:
+							# There is at least one cell, report the fragment.
+							fragment_buf = buf[ : fragment_size]
+							yield CarveResultMemory(offset = fragment_offset, buffer = fragment_buf,
+								hbin_start = fragment_hbin_start, compressed = False)
+
+							pos += 32 # We do not know the exact truncation point within the last cell.
+							prev_result_end_pos = pos # This is an assumed position.
+							continue
+					else:
+						# The hive bin is valid, scan for more hive bins.
+						fragment_offset = pos
+						fragment_hbin_start = check_result_hbin.offset_relative
+
+						expected_hbin_offset_relative = check_result_hbin.offset_relative
+
+						fragment_size = 0 # This value will be adjusted in the loop below.
+						curr_pos_relative = 0 # We will scan the first hive bin in a current chunk again.
+						while True:
+							hbin_buf_partial = buf[curr_pos_relative : curr_pos_relative + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT]
+
+							check_result_hbin = CheckHiveBin(hbin_buf_partial, expected_hbin_offset_relative, True)
+							if not check_result_hbin.is_valid:
+								break
+
+							hbin_buf = buf[curr_pos_relative : curr_pos_relative + check_result_hbin.size]
+							if len(hbin_buf) < check_result_hbin.size:
+								padding_length = check_result_hbin.size - len(hbin_buf)
+								hbin_buf += b'\x00' * padding_length
+
+							check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
+							if check_result_cells.are_valid:
+								curr_pos_relative += check_result_hbin.size
+								fragment_size += check_result_hbin.size
+								expected_hbin_offset_relative += check_result_hbin.size
+								continue
+
+							fragment_size += check_result_cells.truncation_point_relative
+							break
+
+						if fragment_size > 0:
+							fragment_buf = buf[ : fragment_size]
+							yield CarveResultMemory(offset = fragment_offset, buffer = fragment_buf,
+								hbin_start = fragment_hbin_start, compressed = False)
+
+							pos += fragment_size
+							prev_result_end_pos = pos
+							continue
+
+			elif pos % 16 == 0 and RegistryHelpers.LZ77CheckCompressedSignature(eight_bytes, b'hbin'): # Compressed memory pages are aligned to 16 bytes.
+				buf = self.read(pos, PAGE_SIZE)
+
+				if len(buf) <= 16: # End of a file or a read error.
+					break
+
+				buf_decompressed, _, _ = RegistryHelpers.LZ77DecompressBuffer(buf)
+				if len(buf_decompressed) >= PAGE_SIZE:
+					# Remove bogus data at the end of the buffer.
+					# It is there because we did not know the exact size of compressed data.
+					buf_decompressed = buf_decompressed[ : PAGE_SIZE]
+					check_result_hbin = CheckHiveBin(buf_decompressed, None, True)
+					if check_result_hbin.is_valid:
+						# We assume that only one hive bin can be present in a single memory page.
+						# This is always true (because a hive bin cannot be smaller than a memory page).
+						hbin_buf = buf_decompressed[ : check_result_hbin.size]
+
+						fragment_offset = pos
+						fragment_hbin_start = check_result_hbin.offset_relative
+
+						check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
+						if check_result_cells.are_valid:
+							yield CarveResultMemory(offset = fragment_offset, buffer = hbin_buf,
+								hbin_start = fragment_hbin_start, compressed = True)
+						elif check_result_cells.truncation_point_relative > 32:
+							# There is at least one cell, report the fragment.
+							hbin_buf = hbin_buf[ : check_result_cells.truncation_point_relative]
+							yield CarveResultMemory(offset = fragment_offset, buffer = hbin_buf,
+								hbin_start = fragment_hbin_start, compressed = True)
+
+						pos += 16
+						prev_result_end_pos = pos # This is an assumed position.
+						continue
+
+			pos += 1
