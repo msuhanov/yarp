@@ -2692,7 +2692,7 @@ def test_memcarving():
 		for i in carver.carve():
 			c += 1
 			assert i.offset == 3
-			assert len(i.buffer) == 28157
+			assert len(i.buffer) == 28672
 			assert i.hbin_start == 0
 			assert not i.compressed
 
@@ -2708,7 +2708,7 @@ def test_memcarving():
 		for i in carver.carve():
 			c += 1
 			assert i.offset == 3
-			assert len(i.buffer) == 28157
+			assert len(i.buffer) == 28672
 			assert i.hbin_start == 0
 			assert not i.compressed
 

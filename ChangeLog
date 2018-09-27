@@ -1,3 +1,11 @@
+Version: 1.0.23
+
+RegistryCarve: if requested, recover partial (remnant) compressed memory pages.
+yarp-memcarver: always recover partial (remnant) compressed memory pages.
+Minor changes.
+
+---
+
 Version: 1.0.22
 
 RegistryHelpers: add functions to work with compressed data (plain LZ77 and LZ77+Huffman).

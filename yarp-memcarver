@@ -54,13 +54,16 @@ carver = RegistryCarve.MemoryCarver(f)
 carver.progress_callback = print_progress_carving
 
 print('Offset\tFragment size\tCompressed')
-for carve_result in carver.carve():
+for carve_result in carver.carve(True):
 		print('{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer), carve_result.compressed))
 
 		if not carve_result.compressed:
 			output_filename = '{}-fragment'.format(carve_result.offset)
 		else:
-			output_filename = '{}-compressed_fragment'.format(carve_result.offset)
+			if not carve_result.partial_decompression:
+				output_filename = '{}-compressed_fragment'.format(carve_result.offset)
+			else:
+				output_filename = '{}-compressed_remnants'.format(carve_result.offset)
 
 		output_file = os.path.join(args.output_dir, output_filename)
 		with open(output_file, 'wb') as out_f:

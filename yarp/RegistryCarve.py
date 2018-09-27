@@ -19,7 +19,7 @@ CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbi
 CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
 CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
 
-CarveResultMemory = namedtuple('CarveResultMemory', [ 'offset', 'buffer', 'hbin_start', 'compressed' ])
+CarveResultMemory = namedtuple('CarveResultMemory', [ 'offset', 'buffer', 'hbin_start', 'compressed', 'partial_decompression' ])
 
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
 HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
@@ -1330,8 +1330,9 @@ class MemoryCarver(MemoryImage):
 
 		self.progress_callback(bytes_read, bytes_total)
 
-	def carve(self):
+	def carve(self, allow_compressed_remnants = False):
 		"""This method yields named tuples (CarveResultMemory).
+		If 'allow_compressed_remnants' is True, examine partial compressed data (which cannot be decompressed to a full memory page).
 		Notes: all possible offsets are tried in the image; only registry fragments (without their margins) are extracted.
 		"""
 
@@ -1363,6 +1364,11 @@ class MemoryCarver(MemoryImage):
 				check_result_hbin = CheckHiveBin(buf, None, True)
 				if check_result_hbin.is_valid:
 					hbin_buf = buf[ : check_result_hbin.size]
+
+					if len(hbin_buf) < check_result_hbin.size:
+						padding_length = check_result_hbin.size - len(hbin_buf)
+						hbin_buf += b'\x00' * padding_length
+
 					check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
 					if not check_result_cells.are_valid:
 						# The hive bin is truncated.
@@ -1370,11 +1376,11 @@ class MemoryCarver(MemoryImage):
 						fragment_size = check_result_cells.truncation_point_relative
 						fragment_hbin_start = check_result_hbin.offset_relative
 
-						if fragment_size > 32:
+						fragment_buf = buf[ : fragment_size]
+						if len(fragment_buf) > 32:
 							# There is at least one cell, report the fragment.
-							fragment_buf = buf[ : fragment_size]
 							yield CarveResultMemory(offset = fragment_offset, buffer = fragment_buf,
-								hbin_start = fragment_hbin_start, compressed = False)
+								hbin_start = fragment_hbin_start, compressed = False, partial_decompression = None)
 
 							pos += 32 # We do not know the exact truncation point within the last cell.
 							prev_result_end_pos = pos # This is an assumed position.
@@ -1388,6 +1394,7 @@ class MemoryCarver(MemoryImage):
 
 						fragment_size = 0 # This value will be adjusted in the loop below.
 						curr_pos_relative = 0 # We will scan the first hive bin in a current chunk again.
+						padding_used = False
 						while True:
 							hbin_buf_partial = buf[curr_pos_relative : curr_pos_relative + RegistryFile.HIVE_BIN_SIZE_ALIGNMENT]
 
@@ -1396,26 +1403,43 @@ class MemoryCarver(MemoryImage):
 								break
 
 							hbin_buf = buf[curr_pos_relative : curr_pos_relative + check_result_hbin.size]
+
 							if len(hbin_buf) < check_result_hbin.size:
 								padding_length = check_result_hbin.size - len(hbin_buf)
 								hbin_buf += b'\x00' * padding_length
+								padding_used = True
 
 							check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
 							if check_result_cells.are_valid:
 								curr_pos_relative += check_result_hbin.size
 								fragment_size += check_result_hbin.size
 								expected_hbin_offset_relative += check_result_hbin.size
-								continue
+
+								if not padding_used:
+									continue
+								else:
+									break
 
 							fragment_size += check_result_cells.truncation_point_relative
 							break
 
 						if fragment_size > 0:
 							fragment_buf = buf[ : fragment_size]
-							yield CarveResultMemory(offset = fragment_offset, buffer = fragment_buf,
-								hbin_start = fragment_hbin_start, compressed = False)
 
-							pos += fragment_size
+							padding_used = False
+							if len(fragment_buf) < fragment_size:
+								padding_length = fragment_size - len(fragment_buf)
+								fragment_buf += b'\x00' * padding_length
+								padding_used = True
+
+							yield CarveResultMemory(offset = fragment_offset, buffer = fragment_buf,
+								hbin_start = fragment_hbin_start, compressed = False, partial_decompression = None)
+
+							if not padding_used:
+								pos += fragment_size
+							else:
+								pos += fragment_size - padding_length
+
 							prev_result_end_pos = pos
 							continue
 
@@ -1425,11 +1449,18 @@ class MemoryCarver(MemoryImage):
 				if len(buf) <= 16: # End of a file or a read error.
 					break
 
-				buf_decompressed, _, _ = RegistryHelpers.LZ77DecompressBuffer(buf)
-				if len(buf_decompressed) >= PAGE_SIZE:
+				buf_decompressed, __, __ = RegistryHelpers.LZ77DecompressBuffer(buf)
+				if len(buf_decompressed) >= PAGE_SIZE or (allow_compressed_remnants and len(buf_decompressed) >= 128):
 					# Remove bogus data at the end of the buffer.
 					# It is there because we did not know the exact size of compressed data.
 					buf_decompressed = buf_decompressed[ : PAGE_SIZE]
+
+					is_partial = len(buf_decompressed) < PAGE_SIZE
+					if is_partial:
+						# Add extra null bytes.
+						padding_length = PAGE_SIZE - len(buf_decompressed)
+						buf_decompressed += b'\x00' * padding_length
+
 					check_result_hbin = CheckHiveBin(buf_decompressed, None, True)
 					if check_result_hbin.is_valid:
 						# We assume that only one hive bin can be present in a single memory page.
@@ -1442,12 +1473,12 @@ class MemoryCarver(MemoryImage):
 						check_result_cells = CheckCellsOfHiveBin(hbin_buf) # We assume the new cell format here.
 						if check_result_cells.are_valid:
 							yield CarveResultMemory(offset = fragment_offset, buffer = hbin_buf,
-								hbin_start = fragment_hbin_start, compressed = True)
+								hbin_start = fragment_hbin_start, compressed = True, partial_decompression = is_partial)
 						elif check_result_cells.truncation_point_relative > 32:
 							# There is at least one cell, report the fragment.
 							hbin_buf = hbin_buf[ : check_result_cells.truncation_point_relative]
 							yield CarveResultMemory(offset = fragment_offset, buffer = hbin_buf,
-								hbin_start = fragment_hbin_start, compressed = True)
+								hbin_start = fragment_hbin_start, compressed = True, partial_decompression = is_partial)
 
 						pos += 16
 						prev_result_end_pos = pos # This is an assumed position.

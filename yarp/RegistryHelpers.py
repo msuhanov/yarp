@@ -122,7 +122,7 @@ def NTFSDecompressUnit(Buffer):
 		return offset + length <= 2*1024*1024*1024 # Reject obviously invalid write requests.
 
 	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
-		return # Invalid length of input data.
+		return b'' # Invalid length of input data.
 
 	compression_bits = [ 0 ] * 4096
 
@@ -280,7 +280,7 @@ def NTFSDecompressUnitWithNoSlack(Buffer):
 	"""
 
 	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
-		return # Invalid length of input data.
+		return (b'', 0) # Invalid length of input data.
 
 	pos = 0
 	while pos < len(Buffer) and pos < NTFS_COMPRESSION_UNIT_SIZE - NTFS_CLUSTER_SIZE:
