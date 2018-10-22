@@ -1,5 +1,14 @@
-from distutils.core import setup
+from setuptools import setup
 from yarp import __version__
+
+try:
+	from Cython.Build import cythonize
+except ImportError:
+	ext_modules = []
+else:
+	import os.path
+	cython_modules = [ os.path.join('cython', 'CyXpress.pyx') ]
+	ext_modules = cythonize(cython_modules)
 
 setup(
 	name = 'yarp',
@@ -16,5 +25,6 @@ setup(
 		'Operating System :: OS Independent',
 		'Programming Language :: Python :: 3',
 		'Development Status :: 5 - Production/Stable'
-	]
+	],
+	ext_modules = ext_modules
 )

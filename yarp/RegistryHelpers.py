@@ -10,6 +10,8 @@ from collections import namedtuple
 from io import BytesIO
 from struct import unpack
 
+__cython_armed__ = False
+
 NTFS_CLUSTER_SIZE = 4096
 NTFS_COMPRESSION_UNIT_SIZE = 16 * NTFS_CLUSTER_SIZE
 
@@ -115,6 +117,17 @@ def HexDump(Buffer):
 
 	return output_lines
 
+
+LZNT1_COMPRESSION_BITS = [ 0 ] * 4096
+
+offset_bits = 0
+y = 16
+for x in range(0, 4096):
+	LZNT1_COMPRESSION_BITS[x] = 4 + offset_bits
+	if x == y:
+		y = y * 2
+		offset_bits += 1
+
 def NTFSDecompressUnit(Buffer):
 	"""Decompress NTFS data from Buffer (a single compression unit) using the LZNT1 algorithm."""
 
@@ -124,15 +137,7 @@ def NTFSDecompressUnit(Buffer):
 	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
 		return b'' # Invalid length of input data.
 
-	compression_bits = [ 0 ] * 4096
-
-	offset_bits = 0
-	y = 16
-	for x in range(0, 4096):
-		compression_bits[x] = 4 + offset_bits
-		if x == y:
-			y = y * 2
-			offset_bits += 1
+	global LZNT1_COMPRESSION_BITS
 
 	src_index = 0
 	dst_index = 0
@@ -217,7 +222,7 @@ def NTFSDecompressUnit(Buffer):
 				# A compression tuple.
 				table_idx = dst_index - dst_chunk_start
 				try:
-					length_bits = 16 - compression_bits[table_idx]
+					length_bits = 16 - LZNT1_COMPRESSION_BITS[table_idx]
 				except IndexError:
 					# Bogus data.
 					bogus_data = True
@@ -899,3 +904,23 @@ def LZ77HuffmanDecompressBuffer(Buffer, CompatibilityMode = False):
 	OutputObject.close()
 
 	return (OutputBuffer, True, CurrentPosition)
+
+
+# All functions related to the decompression of data are written to support both Python 2.7 and Python 3.
+# Thus, these functions are very slow (Python is slow, but code written for both versions of the language is slower).
+# To speed the things up, we optionally use a faster implementation written in Cython (the CyXpress module).
+try:
+	import CyXpress
+except ImportError:
+	pass
+else:
+	def NTFSDecompressUnit(Buffer):
+		if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
+			return b'' # Invalid length of input data.
+
+		return CyXpress.LZNT1DecompressBuffer(Buffer)
+
+	LZ77DecompressBuffer = CyXpress.LZ77DecompressBuffer
+	LZ77HuffmanDecompressBuffer = CyXpress.LZ77HuffmanDecompressBuffer
+
+	__cython_armed__ = True

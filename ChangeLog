@@ -1,3 +1,12 @@
+Version: 1.0.24
+
+RegistryHelpers: improve the speed of the LZNT1 decompression function, use the Cython implementation of some functions (if available).
+New module: CyXpress.
+Migrate the setup script to the setuptools library.
+Minor changes.
+
+---
+
 Version: 1.0.23
 
 RegistryCarve: if requested, recover partial (remnant) compressed memory pages.

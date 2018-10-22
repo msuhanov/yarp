@@ -302,7 +302,7 @@ class YarpDB(object):
 	def _db_store_security_info(self, owner_sid):
 		"""Add new security information to the database and return its security row ID. If the same information already exists in the database, just return its security row ID."""
 
-		self.db_cursor.execute('SELECT `rowid` from `security` WHERE `owner_sid` = ?', (owner_sid,))
+		self.db_cursor.execute('SELECT `rowid` FROM `security` WHERE `owner_sid` = ?', (owner_sid,))
 
 		results = self.db_cursor.fetchall()
 		for result in results:
