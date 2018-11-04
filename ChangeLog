@@ -1,3 +1,10 @@
+Version: 1.0.25
+
+Registry, RegistryFile: expose fields set by the offreg.dll library.
+yarp-print: print the serialization timestamp (if present).
+
+---
+
 Version: 1.0.24
 
 RegistryHelpers: improve the speed of the LZNT1 decompression function, use the Cython implementation of some functions (if available).

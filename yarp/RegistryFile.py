@@ -503,6 +503,38 @@ class BaseBlock(RegistryFile):
 	def update_checksum(self):
 		self.write_checksum(self.calculate_checksum())
 
+	def get_offreg_signature_old(self):
+		return self.read_binary(168, 4)
+
+	def get_offreg_flags_old(self):
+		return self.read_uint32(172)
+
+	def get_offreg_signature_new(self):
+		return self.read_binary(176, 4)
+
+	def get_offreg_flags_new(self):
+		return self.read_uint32(180)
+
+	def is_hive_serialized_using_offreg(self):
+		"""Check if a hive was serialized using the offreg.dll library."""
+
+		if self.get_offreg_signature_old() == b'OfRg' and self.get_offreg_flags_old() == 1:
+			return True
+
+		if self.get_offreg_signature_new() == b'OfRg' and self.get_offreg_flags_new() == 1:
+			return True
+
+		return False
+
+	def get_offreg_serialization_timestamp(self):
+		if not self.is_primary_file:
+			return
+
+		if not self.is_hive_serialized_using_offreg():
+			return
+
+		return self.read_uint64(512)
+
 class HiveBin(RegistryFile):
 	"""This is a class for a hive bin, it provides methods to access various fields of the hive bin.
 	All methods are self-explanatory.

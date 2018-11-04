@@ -212,6 +212,13 @@ class RegistryHive(object):
 		if timestamp is not None:
 			return DecodeFiletime(timestamp)
 
+	def offreg_serialization_timestamp(self):
+		"""Get, decode and return a serialization timestamp set by the offreg.dll library."""
+
+		timestamp = self.registry_file.baseblock.get_offreg_serialization_timestamp()
+		if timestamp is not None and timestamp > 0:
+			return DecodeFiletime(timestamp)
+
 	def find_key(self, path):
 		"""Find a key node by its path (without a name of a root key), return a key node (a RegistryKey object) or None, if not found."""
 
@@ -1016,6 +1023,13 @@ class RegistryHiveTruncated(object):
 
 		timestamp = self.registry_file.baseblock.effective_last_reorganized_timestamp
 		if timestamp is not None:
+			return DecodeFiletime(timestamp)
+
+	def offreg_serialization_timestamp(self):
+		"""Get, decode and return a serialization timestamp set by the offreg.dll library."""
+
+		timestamp = self.registry_file.baseblock.get_offreg_serialization_timestamp()
+		if timestamp is not None and timestamp > 0:
 			return DecodeFiletime(timestamp)
 
 	def scan(self):

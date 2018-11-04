@@ -46,6 +46,11 @@ def print_hive_information(hive):
 	except (ValueError, OverflowError):
 		pass
 
+	try:
+		print('Serialization timestamp (UTC): {}'.format(hive.offreg_serialization_timestamp()))
+	except (ValueError, OverflowError):
+		pass
+
 	print()
 
 def print_value(value):
