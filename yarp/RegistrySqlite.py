@@ -14,7 +14,7 @@ from collections import namedtuple
 Key = namedtuple('Key', [ 'rowid', 'is_deleted', 'name', 'classname', 'last_written_timestamp', 'access_bits', 'parent_key_id' ])
 Value = namedtuple('Value', [ 'rowid', 'is_deleted', 'name', 'type', 'data', 'parent_key_id' ])
 Security = namedtuple('Security', [ 'rowid', 'owner_sid' ])
-HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'recovered', 'truncated', 'rebuilt' ])
+HiveInfo = namedtuple('HiveInfo', [ 'last_written_timestamp', 'last_reorganized_timestamp', 'offreg_serialization_timestamp', 'recovered', 'truncated', 'rebuilt' ])
 
 def sqlite3_upper_unicode(string):
 	"""The UPPER()-like function with Unicode support."""
@@ -31,6 +31,7 @@ class YarpDB(object):
 					'`id` INTEGER PRIMARY KEY,'
 					'`last_written_timestamp` TEXT,'
 					'`last_reorganized_timestamp` TEXT,'
+					'`offreg_serialization_timestamp` TEXT,'
 					'`root_key_id` TEXT,'
 					'`recovered` NUMERIC,'
 					'`truncated` NUMERIC,'
@@ -233,6 +234,12 @@ class YarpDB(object):
 		else:
 			last_reorganized_timestamp = str(self._hive.registry_file.baseblock.effective_last_reorganized_timestamp)
 
+		offreg_serialization_timestamp = self._hive.registry_file.baseblock.get_offreg_serialization_timestamp()
+		if offreg_serialization_timestamp is None or offreg_serialization_timestamp == 0:
+			offreg_serialization_timestamp = None
+		else:
+			offreg_serialization_timestamp = str(offreg_serialization_timestamp)
+
 		if self._recovered:
 			recovered = 1
 		else:
@@ -248,8 +255,8 @@ class YarpDB(object):
 		else:
 			rebuilt = 0
 
-		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `root_key_id`, `recovered`, `truncated`, `rebuilt`) VALUES (?, ?, ?, ?, ?, ?, ?)',
-			(0, last_written_timestamp, last_reorganized_timestamp, None, recovered, truncated, rebuilt))
+		self.db_cursor.execute('INSERT INTO `hive` (`id`, `last_written_timestamp`, `last_reorganized_timestamp`, `offreg_serialization_timestamp`, `root_key_id`, `recovered`, `truncated`, `rebuilt`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+			(0, last_written_timestamp, last_reorganized_timestamp, offreg_serialization_timestamp, None, recovered, truncated, rebuilt))
 
 		# Set up the value ID counter, etc.
 		self._value_id = 0
@@ -591,7 +598,7 @@ class YarpDB(object):
 	def info(self):
 		"""Get and return information about a hive."""
 
-		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `recovered`, `truncated`, `rebuilt` FROM `hive` WHERE `id` = ?', (0,))
+		self.db_cursor.execute('SELECT `last_written_timestamp`, `last_reorganized_timestamp`, `offreg_serialization_timestamp`, `recovered`, `truncated`, `rebuilt` FROM `hive` WHERE `id` = ?', (0,))
 		results = self.db_cursor.fetchall()
 
 		for result in results:
@@ -600,4 +607,9 @@ class YarpDB(object):
 			else:
 				ts_lr = int(result[1])
 
-			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, recovered = result[2], truncated = result[3], rebuilt = result[4])
+			if result[2] is None:
+				ts_offreg = None
+			else:
+				ts_offreg = int(result[2])
+
+			return HiveInfo(last_written_timestamp = int(result[0]), last_reorganized_timestamp = ts_lr, offreg_serialization_timestamp = ts_offreg, recovered = result[3], truncated = result[4], rebuilt = result[5])

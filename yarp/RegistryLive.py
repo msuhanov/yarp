@@ -6,7 +6,7 @@
 
 import ctypes
 
-__revision__ = 2 # This value will be incremented each time this module is updated.
+__revision__ = 3 # This value will be incremented each time this module is updated.
 
 # Definitions: constants and structures
 _TOKEN_ADJUST_PRIVILEGES = 0x20
@@ -211,7 +211,7 @@ class RegistryHivesLive(object):
 
 		result = ctypes.windll.advapi32.RegOpenKeyExW(PredefinedKey, KeyPath, 0, access_rights, ctypes.byref(handle))
 		if result != 0:
-			raise OSError('The RegOpenKeyExW() failed to open a key')
+			raise OSError('The RegOpenKeyExW() routine failed to open a key')
 
 		self._src_handle = handle
 
@@ -321,7 +321,7 @@ class RegistryHivesLive(object):
 				handle = ctypes.c_void_p()
 				result = ctypes.windll.advapi32.RegOpenCurrentUser(_KEY_READ, ctypes.byref(handle))
 				if result != 0:
-					raise OSError('The RegOpenCurrentUser() failed to open a root key')
+					raise OSError('The RegOpenCurrentUser() routine failed to open a root key')
 
 				self._hkcu_handle = handle
 

@@ -1,3 +1,10 @@
+Version: 1.0.26
+
+RegistrySqlite: expose the serialization timestamp (if present).
+Minor changes.
+
+---
+
 Version: 1.0.25
 
 Registry, RegistryFile: expose fields set by the offreg.dll library.

@@ -915,6 +915,8 @@ except ImportError:
 	pass
 else:
 	def NTFSDecompressUnit(Buffer):
+		"""Decompress NTFS data from Buffer (a single compression unit) using the LZNT1 algorithm."""
+
 		if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
 			return b'' # Invalid length of input data.
 

@@ -113,6 +113,7 @@ hive_sqlite = path.join(HIVES_DIR, 'SqliteHive')
 hive_reallocvalue_sqlite = path.join(HIVES_DIR, 'ReallocValueHive')
 hive_reallocvaluedata_sqlite = path.join(HIVES_DIR, 'ReallocValueDataHive')
 hive_dupname_sqlite = path.join(HIVES_DIR, 'DupNameHive')
+hive_offreg_sqlite = path.join(HIVES_DIR, 'OffHive')
 
 hive_two_owners = path.join(HIVES_DIR, 'TwoOwnersHive')
 
@@ -1945,6 +1946,7 @@ def test_sqlite():
 		assert hi.rebuilt == 0
 		assert hi.last_written_timestamp == 131495536863659453
 		assert hi.last_reorganized_timestamp is None
+		assert hi.offreg_serialization_timestamp is None
 
 		root = h.root_key()
 
@@ -1993,6 +1995,15 @@ def test_sqlite():
 			assert value.is_deleted
 
 		assert c == 1
+
+	with RegistrySqlite.YarpDB(hive_offreg_sqlite, ':memory:') as h:
+		hi = h.info()
+		assert hi.recovered == 0
+		assert hi.truncated == 0
+		assert hi.rebuilt == 0
+		assert hi.last_written_timestamp == 131331190512216222
+		assert hi.last_reorganized_timestamp is None
+		assert hi.offreg_serialization_timestamp == 131876648849521757
 
 	with RegistrySqlite.YarpDB(hive_dirty_old, ':memory:') as h:
 		assert h.info().recovered == 1
@@ -2077,7 +2088,7 @@ def test_sqlite():
 
 		assert c == 3
 
-	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h: # Warning: this test does not use the current database layout.
+	with RegistrySqlite.YarpDB(None, fragment_sqlite_db) as h: # Warning: this test may not use the current database layout.
 		assert h.info().recovered == 0
 		assert h.info().truncated == 1
 		assert h.info().rebuilt == 1
