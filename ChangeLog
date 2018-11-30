@@ -1,3 +1,9 @@
+Version: 1.0.27
+
+RegistryFile: handle an OSError exception during the seek operation.
+
+---
+
 Version: 1.0.26
 
 RegistrySqlite: expose the serialization timestamp (if present).

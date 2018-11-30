@@ -226,7 +226,7 @@ class RegistryFile(object):
 		try:
 			self.file_object.seek(self.file_offset + pos)
 			b = self.file_object.read(length)
-		except OverflowError:
+		except (OverflowError, OSError):
 			raise ReadException('Cannot read data (offset overflow)')
 
 		if len(b) == length:
