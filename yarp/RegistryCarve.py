@@ -5,8 +5,9 @@
 
 from __future__ import unicode_literals
 
-from . import Registry, RegistryFile, RegistryHelpers
+from . import Registry, RegistryFile, RegistryRecords, RegistryHelpers
 from .Registry import DecodeUnicode
+from .RegistryRecover import MAX_PLAUSIBLE_SUBKEYS_COUNT, MAX_PLAUSIBLE_VALUES_COUNT
 from io import BytesIO
 import pickle
 from struct import unpack
@@ -20,6 +21,7 @@ CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_
 CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
 
 CarveResultMemory = namedtuple('CarveResultMemory', [ 'offset', 'buffer', 'hbin_start', 'compressed', 'partial_decompression' ])
+CarveResultDeepMemory = namedtuple('CarveResultDeepMemory', [ 'offset', 'cell_data', 'key_node_or_key_value', 'is_key_node' ])
 
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
 HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
@@ -214,6 +216,42 @@ def ValidateRandomCells(Buffer, OldCells = False):
 		offset += 8
 
 	return
+
+def ValidateKeyNodeOrKeyValue(KeyNodeOrKeyValue):
+	"""Perform a simple check if a key node or a key value contains obviously invalid data."""
+
+	slack_size = len(KeyNodeOrKeyValue.get_slack())
+	if slack_size >= 16:
+		return False
+
+	if type(KeyNodeOrKeyValue) is RegistryRecords.KeyValue:
+		key_value = KeyNodeOrKeyValue
+		if key_value.is_data_inline():
+			if key_value.get_data_size_real() > 4:
+				return False
+		else:
+			data_offset = key_value.get_data_offset()
+			if key_value.get_data_size_real() > 0 and (data_offset < 8 or data_offset % 8 != 0):
+				return False
+
+		try:
+			name = key_value.get_value_name()
+		except RegistryRecords.ParseException:
+			return False
+	else:
+		key_node = KeyNodeOrKeyValue
+		if key_node.get_subkeys_count() > MAX_PLAUSIBLE_SUBKEYS_COUNT or key_node.get_volatile_subkeys_count() > MAX_PLAUSIBLE_SUBKEYS_COUNT:
+			return False
+
+		if key_node.get_flags() & RegistryRecords.KEY_PREDEF_HANDLE == 0 and key_node.get_key_values_count() > MAX_PLAUSIBLE_VALUES_COUNT:
+			return False
+
+		try:
+			name = key_node.get_key_name()
+		except RegistryRecords.ParseException:
+			return False
+
+	return True
 
 class DiskImage(object):
 	"""This class is used to read from a disk image (or a similar source that is aligned to 512 bytes)."""
@@ -1483,5 +1521,54 @@ class MemoryCarver(MemoryImage):
 						pos += 16
 						prev_result_end_pos = pos # This is an assumed position.
 						continue
+
+			pos += 1
+
+	def carve_deep(self):
+		"""This method yields named tuples (CarveResultDeepMemory).
+		Notes: this method can be used to examine sources like files containing disclosed (leaked) uninitialized kernel memory; only the new cell format is supported.
+		There is no way to distinguish between compressed and normal (not compressed) cells, both can pass the validation check and both can be present in memory leaks.
+		"""
+
+		pos = 0
+		file_size = self.size()
+		while pos < file_size:
+			self.call_progress_callback(pos, file_size)
+
+			buf = self.read(pos, PAGE_SIZE)
+			if len(buf) == 0: # End of a file or a read error.
+				break
+
+			if b'\xFF\xFFnk' not in buf and b'\xFF\xFFvk' not in buf and b'\x00\x00nk' not in buf and b'\x00\x00vk' not in buf: # Do the quick check.
+				pos += len(buf) # Jump over a useless buffer.
+				continue
+
+			six_bytes = buf[ : 6]
+			if len(six_bytes) != 6:
+				break # End of a file or a read error.
+
+			if six_bytes.endswith(b'nk') or six_bytes.endswith(b'vk'):
+				cell_size, = unpack('<l', six_bytes[ : 4])
+				cell_size_abs = abs(cell_size)
+
+				if cell_size_abs >= 8 and cell_size_abs % 8 == 0 and pos + cell_size_abs <= file_size and cell_size_abs <= CELL_SIZE_MAX:
+					cell_data = self.read(pos + 4, cell_size_abs - 4)
+
+					try:
+						key_node_or_key_value = RegistryRecords.KeyNode(cell_data)
+						is_key_node = True
+					except Registry.RegistryException:
+						try:
+							key_node_or_key_value = RegistryRecords.KeyValue(cell_data)
+							is_key_node = False
+						except Registry.RegistryException:
+							key_node_or_key_value = None
+							is_key_node = None
+
+					try:
+						if key_node_or_key_value is not None and ValidateKeyNodeOrKeyValue(key_node_or_key_value):
+							yield CarveResultDeepMemory(offset = pos, cell_data = cell_data, key_node_or_key_value = key_node_or_key_value, is_key_node = is_key_node)
+					except Registry.RegistryException:
+						pass
 
 			pos += 1

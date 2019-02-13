@@ -1,3 +1,11 @@
+Version: 1.0.28
+
+RegistryCarve: add the 'carve_deep' method (MemoryCarver).
+Registry: add classes to work with standalone key nodes and key values, add the role for Syscache hives.
+yarp-memcarver: if requested, search for individual (leaked) registry keys and values.
+
+---
+
 Version: 1.0.27
 
 RegistryFile: handle an OSError exception during the seek operation.

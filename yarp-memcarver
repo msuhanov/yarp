@@ -3,7 +3,7 @@
 # yarp: yet another registry parser
 # (c) Maxim Suhanov
 
-from yarp import RegistryCarve, __version__
+from yarp import RegistryCarve, Registry, RegistryHelpers, __version__
 import argparse
 from collections import namedtuple
 import os
@@ -12,7 +12,7 @@ import sys
 PROGRAM_NAME = 'yarp-memcarver'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir' ])
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'do_deep' ])
 
 def parse_args():
 	"""Parse command line arguments and return a named tuple (Arguments)."""
@@ -20,10 +20,13 @@ def parse_args():
 	parser = argparse.ArgumentParser(prog = PROGRAM_NAME, description = 'Carve Windows registry fragments from a memory image or a similar source (e.g., a page file).', add_help = False, prefix_chars = '-')
 
 	group_main = parser.add_argument_group('Main arguments')
+	group_opt = parser.add_argument_group('Optional arguments')
 	group_misc = parser.add_argument_group('Miscellaneous arguments')
 
 	group_main.add_argument('file', help = 'a memory image')
 	group_main.add_argument('outdir', help = 'an output directory')
+
+	group_opt.add_argument('--deep-scan', action = 'store_true', help = 'recover individual keys and values (but not hive bins as in the normal mode), write them to the "deep.txt" file (this mode can be used to carve registry data from a source containing leaked kernel memory)')
 
 	group_misc.add_argument('--help', action = 'help', help = 'show this help message and exit')
 	group_misc.add_argument('--version', action = 'version', help = 'show the version number and exit', version = PROGRAM_VERSION)
@@ -32,8 +35,9 @@ def parse_args():
 
 	source_file = parsed_args.file
 	output_dir = parsed_args.outdir
+	do_deep = parsed_args.deep_scan
 
-	return Arguments(source_file = source_file, output_dir = output_dir)
+	return Arguments(source_file = source_file, output_dir = output_dir, do_deep = do_deep)
 
 def print_progress_carving(bytes_read, bytes_total):
 	print('Bytes read / Bytes total: {} / {}'.format(bytes_read, bytes_total), file = sys.stderr)
@@ -53,20 +57,71 @@ except (OSError, IOError):
 carver = RegistryCarve.MemoryCarver(f)
 carver.progress_callback = print_progress_carving
 
-print('Offset\tFragment size\tCompressed')
-for carve_result in carver.carve(True):
-		print('{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer), carve_result.compressed))
+if not args.do_deep:
+	print('Offset\tFragment size\tCompressed')
+	for carve_result in carver.carve(True):
+			print('{}\t{}\t{}'.format(carve_result.offset, len(carve_result.buffer), carve_result.compressed))
 
-		if not carve_result.compressed:
-			output_filename = '{}-fragment'.format(carve_result.offset)
-		else:
-			if not carve_result.partial_decompression:
-				output_filename = '{}-compressed_fragment'.format(carve_result.offset)
+			if not carve_result.compressed:
+				output_filename = '{}-fragment'.format(carve_result.offset)
 			else:
-				output_filename = '{}-compressed_remnants'.format(carve_result.offset)
+				if not carve_result.partial_decompression:
+					output_filename = '{}-compressed_fragment'.format(carve_result.offset)
+				else:
+					output_filename = '{}-compressed_remnants'.format(carve_result.offset)
 
-		output_file = os.path.join(args.output_dir, output_filename)
-		with open(output_file, 'wb') as out_f:
-			out_f.write(carve_result.buffer)
+			output_file = os.path.join(args.output_dir, output_filename)
+			with open(output_file, 'wb') as out_f:
+				out_f.write(carve_result.buffer)
+else:
+	print('Scanning for individual registry keys and values...', file = sys.stderr)
+
+	output_file = os.path.join(args.output_dir, 'deep.txt')
+	out_f = open(output_file, 'wb')
+
+	for deep_result in carver.carve_deep():
+		out_f.write(('Offset: {}'.format(deep_result.offset) + os.linesep).encode())
+
+		if deep_result.is_key_node:
+			try:
+				key = Registry.StandaloneRegistryKey(deep_result.key_node_or_key_value)
+				key_name = key.name()
+				key_last_written_timestamp = key.last_written_timestamp()
+			except Exception:
+				continue
+
+			out_f.write(('Type: key' + os.linesep).encode())
+			out_f.write(('Name: {}'.format(key_name) + os.linesep).encode())
+			out_f.write(('Last written timestamp (UTC): {}'.format(key_last_written_timestamp) + os.linesep).encode())
+			out_f.write(('Access bits: {}'.format(key.access_bits()) + os.linesep).encode())
+			out_f.write(('Number of subkeys: {}'.format(key.subkeys_count()) + os.linesep).encode())
+			out_f.write(('Number of values: {}'.format(key.values_count()) + os.linesep).encode())
+		else:
+			try:
+				value = Registry.StandaloneRegistryValue(deep_result.key_node_or_key_value)
+				value_name = value.name()
+			except Exception:
+				continue
+
+			out_f.write(('Type: value' + os.linesep).encode())
+
+			if len(value_name) > 0:
+				out_f.write(('Value name: {}'.format(value_name) + os.linesep).encode())
+			else:
+				out_f.write(('Default value' + os.linesep).encode())
+
+			out_f.write(('Value type: {}'.format(value.type_str()) + os.linesep).encode())
+			out_f.write(('Data size: {}'.format(value.data_size()) + os.linesep).encode())
+
+			data_raw = value.data_raw()
+			if data_raw is not None:
+				out_f.write(('Data (hexdump):' + os.linesep).encode())
+				out_f.write((RegistryHelpers.HexDump(data_raw) + os.linesep).encode())
+			else:
+				out_f.write(('Data unavailable' + os.linesep).encode())
+
+		out_f.write(os.linesep.encode())
+
+	out_f.close()
 
 f.close()

@@ -37,7 +37,8 @@ HiveRoles = {
 'COMPONENTS': [ 'Installers', 'CanonicalData' ],
 'SAM': [ 'SAM' ],
 'USRCLASS': [ 'Local Settings' ],
-'AMCACHE': [ 'Root' ]
+'AMCACHE': [ 'Root' ],
+'SYSCACHE': [ 'DefaultObjectStore' ]
 }
 
 AutoRecoveryResult = namedtuple('AutoRecoveryResult', [ 'recovered', 'is_new_log', 'file_objects' ])
@@ -1081,3 +1082,103 @@ class RegistryHiveTruncated(object):
 
 					if len(slack) >= 4: # Skip the slack space data if it is less than 4 bytes.
 						self.effective_slack.add(slack)
+
+class StandaloneRegistryKey(object):
+	"""This is a high-level class for a standalone registry key."""
+
+	def __init__(self, key_node):
+		self.key_node = key_node
+
+	def last_written_timestamp(self):
+		"""Get, decode and return a last written timestamp (a datetime object)."""
+
+		return DecodeFiletime(self.key_node.get_last_written_timestamp())
+
+	def access_bits(self):
+		"""Get and return access bits."""
+
+		return self.key_node.get_access_bits()
+
+	def name(self):
+		"""Get, decode and return a key name string."""
+
+		name_buf = self.key_node.get_key_name()
+		is_ascii = self.key_node.get_flags() & RegistryRecords.KEY_COMP_NAME > 0
+		if is_ascii:
+			name = DecodeASCII(name_buf)
+		else:
+			name = DecodeUnicode(name_buf)
+
+		if name.find('\\') != -1:
+			raise WalkException('Key node does not have a valid name')
+
+		return name
+
+	def subkeys_count(self):
+		"""Get and return a number of subkeys. Volatile subkeys are not counted."""
+
+		return self.key_node.get_subkeys_count()
+
+	def values_count(self):
+		"""Get and return a number of key values."""
+
+		if self.key_node.get_flags() & RegistryRecords.KEY_PREDEF_HANDLE > 0:
+			return 0
+
+		return self.key_node.get_key_values_count()
+
+	def __str__(self):
+		return 'StandaloneRegistryKey, name: {}, subkeys: {}, values: {}'.format(self.name(), self.subkeys_count(), self.values_count())
+
+class StandaloneRegistryValue(object):
+	"""This is a high-level class for a standalone registry value."""
+
+	def __init__(self, key_value):
+		self.key_value = key_value
+
+	def name(self):
+		"""Get, decode and return a value name string."""
+
+		name_buf = self.key_value.get_value_name()
+		is_ascii = self.key_value.get_flags() & RegistryRecords.VALUE_COMP_NAME > 0
+		if is_ascii:
+			return DecodeASCII(name_buf)
+
+		return DecodeUnicode(name_buf)
+
+	def type_raw(self):
+		"""Get and return a value type (as an integer)."""
+
+		return self.key_value.get_data_type()
+
+	def type_str(self):
+		"""Get, decode and return a value type (as a string)."""
+
+		value_type = self.key_value.get_data_type()
+		if value_type in ValueTypes.keys():
+			return ValueTypes[value_type]
+		else:
+			return hex(value_type)
+
+	def data_size(self):
+		"""Get and return a data size."""
+
+		return self.key_value.get_data_size_real()
+
+	def data_raw(self):
+		"""Get and return data (as raw bytes or None, if unavailable)."""
+
+		if self.key_value.get_data_size_real() == 0:
+			return b''
+
+		if self.key_value.is_data_inline():
+			return self.key_value.get_inline_data()[ : self.key_value.get_data_size_real()]
+
+		return
+
+	def __str__(self):
+		name = self.name()
+		if len(name) > 0:
+			return 'StandaloneRegistryValue, name: {}, data type: {}, data size: {}'.format(name, self.type_str(), self.data_size())
+		else:
+			return 'StandaloneRegistryValue, default value (no name), data type: {}, data size: {}'.format(self.type_str(), self.data_size())
