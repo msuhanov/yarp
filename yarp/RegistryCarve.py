@@ -12,6 +12,7 @@ from io import BytesIO
 import pickle
 from struct import unpack
 from collections import namedtuple
+from ctypes import c_uint32
 import mmap
 
 CarveResult = namedtuple('CarveResult', [ 'offset', 'size', 'hbins_data_size', 'truncated', 'truncation_point', 'truncation_scenario', 'filename' ])
@@ -20,12 +21,15 @@ CarveResultFragment = namedtuple('CarveResultFragment', [ 'offset', 'size', 'hbi
 CarveResultCompressed = namedtuple('CarveResultCompressed', [ 'offset', 'buffer_decompressed', 'filename' ])
 CarveResultFragmentCompressed = namedtuple('CarveResultFragmentCompressed', [ 'offset', 'buffer_decompressed', 'hbin_start' ])
 
+CarveResultLog = namedtuple('CarveResultLog', [ 'offset', 'size', 'log_entries_count' ])
+
 CarveResultMemory = namedtuple('CarveResultMemory', [ 'offset', 'buffer', 'hbin_start', 'compressed', 'partial_decompression' ])
 CarveResultDeepMemory = namedtuple('CarveResultDeepMemory', [ 'offset', 'cell_data', 'key_node_or_key_value', 'is_key_node' ])
 
 BaseBlockCheckResult = namedtuple('BaseBlockCheckResult', [ 'is_valid', 'hbins_data_size', 'filename', 'old_cells' ])
 HiveBinCheckResult = namedtuple('HiveBinCheckResult', [ 'is_valid', 'size', 'offset_relative' ])
 CellsCheckResult = namedtuple('CellsCheckResult', [ 'are_valid', 'truncation_point_relative' ])
+LogEntryCheckResult = namedtuple('LogEntryCheckResult', [ 'is_valid', 'size', 'next_sequence_number' ])
 
 SECTOR_SIZE = 512 # This is an assumed sector size.
 PAGE_SIZE = 4096 # This is a memory page size.
@@ -33,6 +37,7 @@ FILE_MARGIN_SIZE = 4*1024*1024 # We will read more bytes than specified in the b
 FILE_SIZE_MAX_MIB = 500 # We do not expect a primary file to be larger than this (in MiB).
 CELL_SIZE_MAX = 2*1024*1024 # We do not expect a cell to be larger than this.
 HBIN_SIZE_MAX = 64*1024*1024 # We do not expect a hive bin to be larger than this.
+LOG_ENTRY_SIZE_MAX = 64*1024*1024 # We do not expect a log entry to be larger than this. Also, we will read candidate log entries in chunks of this size.
 
 class ValidationException(Registry.RegistryException):
 	"""This exception is raised when a reconstructed hive is invalid."""
@@ -137,6 +142,29 @@ def CheckCellsOfHiveBin(Buffer, OldCells = False):
 		curr_pos_relative += cell_size_abs
 
 	return CellsCheckResult(are_valid = True, truncation_point_relative = None)
+
+def CheckLogEntry(Buffer, ExpectedSequenceNumber):
+	"""Check if Buffer contains a valid log entry, return a named tuple (LogEntryCheckResult)."""
+
+	if len(Buffer) < SECTOR_SIZE:
+		return LogEntryCheckResult(is_valid = False, size = None, next_sequence_number = None)
+
+	signature, size, __, sequence_number = unpack('<4sLLL', Buffer[ : 16])
+	if signature != b'HvLE' or size > LOG_ENTRY_SIZE_MAX or len(Buffer) < size:
+		return LogEntryCheckResult(is_valid = False, size = None, next_sequence_number = None)
+
+	if ExpectedSequenceNumber is None:
+		sequence_number_expected = sequence_number
+	else:
+		sequence_number_expected = ExpectedSequenceNumber
+
+	log_entry_obj = BytesIO(Buffer[ : size])
+	try:
+		log_entry = RegistryFile.LogEntry(log_entry_obj, 0, sequence_number_expected)
+	except (RegistryFile.LogEntryException, RegistryFile.ReadException) as e:
+		return LogEntryCheckResult(is_valid = False, size = None, next_sequence_number = None)
+
+	return LogEntryCheckResult(is_valid = True, size = size, next_sequence_number = c_uint32(sequence_number + 1).value)
 
 def ValidateRandomFragment(Buffer, AllowNullBytesOnly):
 	"""Check if Buffer contains a plausible registry fragment. This function is used to identify NTFS decompression errors, so only simple checks are performed."""
@@ -314,7 +342,7 @@ class MemoryImage(object):
 			return self.file_object.read(size)
 
 class Carver(DiskImage):
-	"""This class is used to carve registry files (primary) and registry fragments from a disk image."""
+	"""This class is used to carve registry files (primary and transaction log) and registry fragments from a disk image."""
 
 	progress_callback = None
 	"""A progress callback. Arguments: bytes_read, bytes_total."""
@@ -335,11 +363,12 @@ class Carver(DiskImage):
 
 		self.progress_callback(bytes_read, bytes_total)
 
-	def carve(self, recover_fragments = False, ntfs_decompression = False, suggest_margin = False):
+	def carve(self, recover_fragments = False, ntfs_decompression = False, suggest_margin = False, recover_logs = False):
 		"""This method yields named tuples (CarveResult and, if 'recover_fragments' is True, CarveResultFragment).
 		When 'ntfs_decompression' is True, data from compression units (NTFS) will be also recovered, this will yield
 		CarveResultCompressed and, if 'recover_fragments' is also True, CarveResultFragmentCompressed named tuples.
 		When 'suggest_margin' is True, set the 'suggested_margin' and 'suggested_margin_rounded' fields for each CarveResultFragment named tuple.
+		When 'recover_logs' is True, log entries (new format) will be also recovered, this will yield CarveResultLog named tuples.
 		Note:
 		Only the first bytes of each sector will be scanned for signatures, because registry files (primary) are always larger than
 		an NTFS file record (a primary file is at least 8192 bytes in length, while a file record is 1024 or 4096 bytes in length),
@@ -519,6 +548,36 @@ class Carver(DiskImage):
 
 					pos += fragment_size
 					prev_result_end_pos = pos
+					continue
+
+			elif four_bytes == b'HvLE' and recover_logs:
+				log_entry_buf = self.read(pos, LOG_ENTRY_SIZE_MAX)
+				check_result_log_entry = CheckLogEntry(log_entry_buf, None)
+
+				if check_result_log_entry.is_valid:
+					log_offset = pos
+					log_size = check_result_log_entry.size
+					log_entries_count = 1
+
+					curr_pos_relative = check_result_log_entry.size
+					while True:
+						log_entry_buf = self.read(pos + curr_pos_relative, LOG_ENTRY_SIZE_MAX)
+						check_result_log_entry = CheckLogEntry(log_entry_buf, check_result_log_entry.next_sequence_number)
+
+						if not check_result_log_entry.is_valid:
+							break
+
+						log_entries_count += 1
+						log_size += check_result_log_entry.size
+						curr_pos_relative += check_result_log_entry.size
+
+					yield CarveResultLog(offset = log_offset, size = log_size, log_entries_count = log_entries_count)
+
+					if log_size % SECTOR_SIZE == 0:
+						pos += log_size
+					else:
+						pos += log_size + SECTOR_SIZE - log_size % SECTOR_SIZE
+
 					continue
 
 			elif ntfs_decompression:

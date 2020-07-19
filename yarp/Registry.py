@@ -1065,16 +1065,16 @@ class RegistryHiveTruncated(object):
 			if len(cell_data) >= 8: # A subkeys list with at least one entry.
 				try:
 					l = RegistryRecords.IndexLeaf(cell_data)
-				except RegistryException:
+				except (RegistryException, UnicodeDecodeError): # UnicodeDecodeError can be raised when using Python 2.
 					try:
 						l = RegistryRecords.FastLeaf(cell_data)
-					except RegistryException:
+					except (RegistryException, UnicodeDecodeError):
 						try:
 							l = RegistryRecords.HashLeaf(cell_data)
-						except RegistryException:
+						except (RegistryException, UnicodeDecodeError):
 							try:
 								l = RegistryRecords.IndexRoot(cell_data)
-							except RegistryException:
+							except (RegistryException, UnicodeDecodeError):
 								l = None # Not a subkeys list.
 
 				if l is not None:

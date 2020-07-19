@@ -1,3 +1,16 @@
+Version: 1.0.29
+
+RegistryCarve: add support for carving transaction log entries.
+RegistryFile: add a function to rebuild transaction log entries to dummy a transaction log file.
+yarp-carver: add an option to carve transaction log entries.
+yarp-print: add support for extracting data from transaction log files alone (without primary files).
+Minor changes.
+
+This is going to be the last release compatible with Python 2 (with incompatible features explicitly marked in the code).
+Future versions will not be tested against Python 2.7.
+
+---
+
 Version: 1.0.28
 
 RegistryCarve: add the 'carve_deep' method (MemoryCarver).

@@ -1,0 +1,26 @@
+1. This is unallocated space extracted from a bootcamp volume of a modern Mac laptop (with the T2 chip present).
+2. The operating system installed in this volume is Windows 10 "20H1", the file system used is NTFS, this file system is BitLocker-encrypted.
+3. The Trim support was left as is (enabled).
+4. The operating system was used for some time.
+5. The volume was decrypted (into an image file) using the 'dislocker' tool (an unreleased development version).
+6. After decryption, garbage blocks (blocks filled with null bytes in their "encrypted" state, they are "decrypted" into random data, such blocks originate from the Trim command) were zeroed out in the decrypted image.
+7. Then, unallocated space was extracted using the 'blkls' tool (The Sleuth Kit).
+8. Finally, null blocks (in the decrypted state of the unallocated space) were converted into sparse ranges. And the unallocate space was compressed into the TGZ archive.
+9. You can find registry and other data in such unallocated space. For example (Windows 10 Timeline):
+
+00e615e0  00 00 00 00 5e dc ee 83  5f 04 7b 83 7b 22 74 79  |....^..._.{.{"ty|
+00e615f0  70 65 22 3a 22 55 73 65  72 45 6e 67 61 67 65 64  |pe":"UserEngaged|
+00e61600  22 2c 22 72 65 70 6f 72  74 69 6e 67 41 70 70 22  |","reportingApp"|
+00e61610  3a 22 53 68 65 6c 6c 41  63 74 69 76 69 74 79 4d  |:"ShellActivityM|
+00e61620  6f 6e 69 74 6f 72 22 2c  22 61 63 74 69 76 65 44  |onitor","activeD|
+00e61630  75 72 61 74 69 6f 6e 53  65 63 6f 6e 64 73 22 3a  |urationSeconds":|
+00e61640  34 2c 22 73 68 65 6c 6c  43 6f 6e 74 65 6e 74 44  |4,"shellContentD|
+00e61650  65 73 63 72 69 70 74 69  6f 6e 22 3a 7b 22 4d 65  |escription":{"Me|
+00e61660  72 67 65 64 47 61 70 22  3a 36 30 30 2c 22 41 63  |rgedGap":600,"Ac|
+00e61670  74 69 76 69 74 79 45 6e  67 61 67 65 6d 65 6e 74  |tivityEngagement|
+00e61680  46 6c 61 67 73 22 3a 33  7d 2c 22 75 73 65 72 54  |Flags":3},"userT|
+00e61690  69 6d 65 7a 6f 6e 65 22  3a 22 45 75 72 6f 70 65  |imezone":"Europe|
+00e616a0  2f 4d 6f 73 63 6f 77 22  7d 03 49 4d 35 47 61 34  |/Moscow"}.IM5Ga4|
+00e616b0  4f 2b 76 46 51 72 48 34  41 72 71 48 6d 71 45 57  |O+vFQrH4ArqHmqEW|
+00e616c0  67 33 62 69 66 48 50 56  45 38 47 58 49 53 6d 53  |g3bifHPVE8GXISmS|
+00e616d0  43 66 78 68 63 3d 5e dc  ee 7f 5e dc ee 83 5e dc  |Cfxhc=^...^...^.|

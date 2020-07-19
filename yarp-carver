@@ -13,7 +13,7 @@ import sys
 PROGRAM_NAME = 'yarp-carver'
 PROGRAM_VERSION = __version__
 
-Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction', 'ntfs_offsets', 'rebuild_margin' ])
+Arguments = namedtuple('Arguments', [ 'source_file', 'output_dir', 'no_reconstruction', 'ntfs_offsets', 'rebuild_margin', 'recover_logs' ])
 
 def parse_ntfs_offsets(ntfs_offsets):
 	if ntfs_offsets is None:
@@ -58,6 +58,7 @@ def parse_args():
 	group_main.add_argument('outdir', help = 'an output directory')
 
 	group_opt.add_argument('--rebuild-margin', action = 'store_true', help = 'include a margin (registry data with no specific header preceding an identified fragment) to a fragment by rebuilding it')
+	group_opt.add_argument('--recover-logs', action = 'store_true', help = 'recover transaction log entries and rebuild them')
 	group_opt.add_argument('--no-reconstruction', action = 'store_true', help = 'do not reconstruct fragmented hives')
 	group_opt.add_argument('--volumes', action = 'store', nargs = 1, metavar = 'offsets', default = None, help = 'use a given comma-separated list of NTFS volume offsets (in bytes) to reconstruct fragmented hives using NTFS metadata (this requires reading the disk image twice)')
 
@@ -71,8 +72,9 @@ def parse_args():
 	no_reconstruction = parsed_args.no_reconstruction
 	ntfs_offsets = parse_ntfs_offsets(parsed_args.volumes)
 	rebuild_margin = parsed_args.rebuild_margin
+	recover_logs = parsed_args.recover_logs
 
-	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction, ntfs_offsets = ntfs_offsets, rebuild_margin = rebuild_margin)
+	return Arguments(source_file = source_file, output_dir = output_dir, no_reconstruction = no_reconstruction, ntfs_offsets = ntfs_offsets, rebuild_margin = rebuild_margin, recover_logs = recover_logs)
 
 def make_sane_filename(filename):
 	for bad_char in [ '\x00', '/', '\\', ':' ]:
@@ -108,7 +110,7 @@ carver.progress_callback = print_progress_carving
 results = []
 
 print('Offset\tSize\tTruncated\tInternal file name / Comment')
-for carve_result in carver.carve(True, True, args.rebuild_margin):
+for carve_result in carver.carve(True, True, args.rebuild_margin, args.recover_logs):
 	if type(carve_result) is RegistryCarve.CarveResult:
 		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, carve_result.truncated, carve_result.filename))
 
@@ -205,6 +207,24 @@ for carve_result in carver.carve(True, True, args.rebuild_margin):
 			out_f.write(carve_result.buffer_decompressed)
 
 		results.append(carve_result)
+
+	elif type(carve_result) is RegistryCarve.CarveResultLog:
+		print('{}\t{}\t{}\t{}'.format(carve_result.offset, carve_result.size, True, '<transaction log entries>'))
+
+		output_filename = '{}-log'.format(carve_result.offset)
+		output_file = os.path.join(args.output_dir, output_filename)
+
+		f.seek(carve_result.offset)
+		buf = f.read(carve_result.size)
+
+		tmp_f = BytesIO(buf)
+		tmp_out_f = RegistryFile.LogEntriesTranslator(tmp_f)
+		buf = tmp_out_f.getvalue()
+		tmp_f.close()
+		tmp_out_f.close()
+
+		with open(output_file, 'wb') as out_f:
+			out_f.write(buf)
 
 if not args.no_reconstruction:
 	print('', file = sys.stderr)

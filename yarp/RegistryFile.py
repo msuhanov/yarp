@@ -1621,3 +1621,54 @@ def FragmentWithMarginTranslator(file_object, margin_size):
 
 	# We are done.
 	return new_fragment_object
+
+def LogEntriesTranslator(file_object, effective_version = 5):
+	"""This function is used to translate a fragment consisting of one or more log entries (as a file object) to a dummy transaction log file (as a BytesIO object).
+	The BytesIO object is then returned.
+	"""
+
+	sector_size = 512
+
+	reg_file = RegistryFile(file_object)
+
+	signature = reg_file.read_binary(0, 4)
+	if signature != b'HvLE':
+		raise LogEntryException('Invalid signature: {}'.format(signature))
+
+	first_sequence_number = reg_file.read_uint32(12)
+	first_hbins_data_size = reg_file.read_uint32(16)
+
+	log_entries_size = reg_file.get_file_size()
+	if log_entries_size % sector_size != 0:
+		raise LogEntryException('Invalid size: {}'.format(log_entries_size))
+
+	allocation_size = BASE_BLOCK_LENGTH_LOG + log_entries_size
+	dummy_log_file_object = BytesIO(b'\x00' * allocation_size)
+
+	# Copy the log entries to the right location.
+	file_object.seek(0)
+	dummy_log_file_object.seek(BASE_BLOCK_LENGTH_LOG)
+	buf = file_object.read()
+	dummy_log_file_object.write(buf)
+
+	# Now we need to create a dummy base block.
+	reg_file = RegistryFile(dummy_log_file_object)
+
+	reg_file.write_binary(0, b'regf')
+	reg_file.write_uint32(4, first_sequence_number)
+	reg_file.write_uint32(8, first_sequence_number)
+	reg_file.write_uint64(12, 0)
+	reg_file.write_uint32(20, 1)
+	reg_file.write_uint32(24, effective_version)
+	reg_file.write_uint32(28, FILE_TYPE_LOG_NEW)
+	reg_file.write_uint32(32, FILE_FORMAT_DIRECT_MEMORY_LOAD)
+	reg_file.write_uint32(36, CELL_OFFSET_NIL)
+	reg_file.write_uint32(40, first_hbins_data_size)
+	reg_file.write_uint32(44, FILE_CLUSTERING_FACTOR)
+
+	# Now we need to update the checksum.
+	baseblock = BaseBlock(dummy_log_file_object, True)
+	baseblock.update_checksum()
+
+	# We are done.
+	return dummy_log_file_object

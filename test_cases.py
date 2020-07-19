@@ -5,6 +5,7 @@
 
 import pytest
 import sys
+import tarfile
 from io import BytesIO
 from os import path, remove
 from hashlib import md5
@@ -98,6 +99,9 @@ hive_memcarving_2fragments = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragments
 hive_memcarving_2fragments_gap = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragmentsWithGap')
 hive_memcarving_2fragments_gap2 = path.join(HIVES_DIR, 'MemoryCarving', 'TwoFragmentsWithGap2')
 hive_memcarving_hbin_compressed = path.join(HIVES_DIR, 'MemoryCarving', 'HiveBinCompressed')
+
+log_carving_bootcamp = path.join(HIVES_DIR, 'Carving', 'bootcamp_unallocated_decrypted_nogarbage_sparse.tgz')
+log_carving_bootcamp_raw = path.join(HIVES_DIR, 'Carving', 'bootcamp_unallocated_decrypted_nogarbage_sparse.raw')
 
 hive_recon_2 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction2')
 hive_recon_3 = path.join(HIVES_DIR, 'Carving', 'FragRecon', 'FragmentReconstruction3')
@@ -2869,3 +2873,250 @@ def test_memcarving():
 			k += 1
 
 	assert k == 2
+
+def test_log_carving_1():
+	global found
+	found = 0
+
+	def test_translator(buf):
+		src_obj = BytesIO(buf)
+		log_file = RegistryFile.LogEntriesTranslator(src_obj)
+		log = RegistryFile.NewLogFile(log_file)
+
+		for l in log.log_entries():
+			assert type(l) is RegistryFile.LogEntry
+
+		for l in log.remnant_log_entries(False):
+			assert False
+
+		c = 0
+		for l in log.remnant_log_entries(True):
+			c += 1
+			assert type(l) is RegistryFile.LogEntry
+
+		hive_obj = log.rebuild_primary_file_using_remnant_log_entries(True)
+		hive = Registry.RegistryHiveTruncated(hive_obj)
+
+		cc = 0
+
+		for l in hive.scan():
+			if type(l) is Registry.RegistryKey:
+				if 'find_me_' in l.name():
+					global found
+					found += 1
+
+			cc += 1
+
+		assert cc > 0
+
+		src_obj.close()
+		return c
+
+
+	if sys.version_info.major != 3:
+		# For some reason, this test works well with Python 3 only.
+		# When Python 2.7 is used, the test fails (no log entries found) unless an uncompressed disk image is given (instead of the TGZ archive).
+
+		try:
+			f = open(log_carving_bootcamp_raw, 'rb')
+		except Exception:
+			pytest.skip() # Skip the test, if there is no uncompressed disk image.
+	else:
+		f = tarfile.open(log_carving_bootcamp, 'r:gz').extractfile('bootcamp_unallocated_decrypted_nogarbage_sparse.raw')
+
+	carver = RegistryCarve.Carver(f)
+
+	c = 0
+	l = 0
+	found_multiple = False
+	for i in carver.carve(True, True, True, True):
+		if type(i) is RegistryCarve.CarveResultLog:
+			c += i.log_entries_count
+			if i.log_entries_count > 2:
+				found_multiple = True
+
+			f.seek(i.offset)
+			buf_log = f.read(i.size)
+			l += test_translator(buf_log)
+
+	assert c == 14
+	assert found_multiple
+	assert l == c
+	assert found > 0
+
+	f.close()
+
+def test_log_carving_2():
+	def test_translator(buf):
+		src_obj = BytesIO(buf)
+		log_file = RegistryFile.LogEntriesTranslator(src_obj)
+		log = RegistryFile.NewLogFile(log_file)
+
+		for l in log.log_entries():
+			assert type(l) is RegistryFile.LogEntry
+
+		for l in log.remnant_log_entries(False):
+			assert False
+
+		for l in log.remnant_log_entries(True):
+			assert type(l) is RegistryFile.LogEntry
+
+		hive_obj = log.rebuild_primary_file_using_remnant_log_entries(True)
+		hive = Registry.RegistryHiveTruncated(hive_obj)
+
+		cc = 0
+		for l in hive.scan():
+			cc += 1
+
+		assert cc > 5
+
+		src_obj.close()
+
+
+	with open(hive_dirty_new1_log2, 'rb') as f:
+		buf = f.read()
+
+	f = BytesIO(buf[512 : ])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.offset == 0 and i.size == 40448
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 1
+
+	f.close()
+
+	f = BytesIO(buf)
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.offset == 512 and i.size == 40448
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 1
+
+	f.close()
+
+	f = BytesIO(buf[128 : ])
+	carver = RegistryCarve.Carver(f)
+
+	for i in carver.carve(True, True, True, True):
+		assert False
+
+	f.close()
+
+	f = BytesIO(buf[8192 : ] + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert (cnt == 1 and i.offset == 0 and i.size == 32768) or (cnt == 2 and i.offset == 57344 and i.size == 7680)
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 2
+
+	f.close()
+
+	f = BytesIO(buf[8192 : 8192 + 32768] + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert (cnt == 1 and i.offset == 0 and i.size == 32768) or (cnt == 2 and i.offset == 32768 and i.size == 7680)
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 2
+
+	f.close()
+
+	f = BytesIO(buf[512 : 8192] + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.size == 7680
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 2
+
+	f.close()
+
+	padding = b'HvLE' * 128
+	f = BytesIO(buf[512 : 8192] + padding + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.size == 7680
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 2
+
+	f.close()
+
+	f = BytesIO(padding + buf[512 : 8192] + padding + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.size == 7680
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 2
+
+	f.close()
+
+	f = BytesIO(padding + buf[513 : 8193] + padding + buf[512 : 8192])
+	carver = RegistryCarve.Carver(f)
+
+	cnt = 0
+	for i in carver.carve(True, True, True, True):
+		cnt += 1
+		assert type(i) is RegistryCarve.CarveResultLog
+		assert i.size == 7680
+
+		f.seek(i.offset)
+		buf_log = f.read(i.size)
+		test_translator(buf_log)
+
+	assert cnt == 1
+
+	f.close()

@@ -309,7 +309,14 @@ primary = open(args.primary_file, 'rb')
 try:
 	hive = Registry.RegistryHive(primary)
 except RegistryFile.NotSupportedException:
-	raise
+	print('File seems to be a transaction log file, converting it to a truncated primary file', file = sys.stderr)
+
+	temp_obj = primary
+	log = RegistryFile.NewLogFile(temp_obj)
+	primary = log.rebuild_primary_file_using_remnant_log_entries(True)
+	temp_obj.close()
+
+	truncated = True
 except RegistryFile.BaseBlockException:
 	print('File seems to be a fragment, converting it to a truncated primary file', file = sys.stderr)
 
