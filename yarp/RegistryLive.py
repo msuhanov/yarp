@@ -6,7 +6,7 @@
 
 import ctypes
 
-__revision__ = 3 # This value will be incremented each time this module is updated.
+__revision__ = 4 # This value will be incremented each time this module is updated.
 
 # Definitions: constants and structures
 _TOKEN_ADJUST_PRIVILEGES = 0x20
@@ -130,7 +130,12 @@ class NTFileLikeObject(object):
 		ctypes.windll.kernel32.CloseHandle(self.handle)
 
 class RegistryHivesLive(object):
-	"""This class is used to acquire and open hives from a live (running) system."""
+	"""This class is used to acquire and open hives from a live (running) system.
+	The 'open_hive_by_key' and 'open_apphive_by_file' methods attempt to preserve deleted data, but there are two exceptions:
+	1) remnant data (bytes after the end of hive data when the file size is larger) is not available in the exported hive (it is intact in the original hive);
+	2) exported hives with layered keys do not contain any deleted data (and layered keys metadata is absent too), because only the merged view is exported.
+	In the second case, a temporary hive is created by the kernel, then it is filled with merged data from two or more registry hives. This happens with containers (like Docker).
+	"""
 
 	def __init__(self):
 		self._src_handle = None
@@ -234,8 +239,24 @@ class RegistryHivesLive(object):
 		ctypes.windll.advapi32.RegCloseKey(self._src_handle)
 		self._src_handle = None
 
+	def _do_container_check(self, file_object):
+		"""Check if a hive has been exported from inside of a container."""
+
+		signature = file_object.read(4)
+		if signature != b'regf':
+			raise OSError('The exported hive is invalid')
+
+		seq_1 = file_object.read(4)
+		seq_2 = file_object.read(4)
+
+		if seq_1 == seq_2 == b'\x01\x00\x00\x00': # This looks like a hive exported from a live container.
+			import sys
+			print('It seems that you run this script from inside of a container (see the docstring for the RegistryHivesLive class)', file = sys.stderr)
+
+		file_object.seek(0, 0)
+
 	def open_hive_by_key(self, RegistryPath, FilePath = None):
-		"""Export and then open a hive using its registry path.
+		"""Export and then open a hive using its registry path (e.g., 'HKEY_LOCAL_MACHINE\\SOFTWARE').
 		If 'FilePath' is not None, use this path to save an exported hive (as a file).
 		If 'FilePath' is None, create a temporary file to store an exported hive (in a current directory).
 		This method returns a file-like object for an exported hive.
@@ -275,6 +296,7 @@ class RegistryHivesLive(object):
 		self._close_root_key()
 
 		f = NTFileLikeObject(self._dst_handle)
+		self._do_container_check(f)
 		return f
 
 	def open_apphive_by_file(self, AppHivePath, FilePath = None):
@@ -306,6 +328,7 @@ class RegistryHivesLive(object):
 		self._close_root_key()
 
 		f = NTFileLikeObject(self._dst_handle)
+		self._do_container_check(f)
 		return f
 
 	def _resolve_predefined_key(self, PredefinedKeyStr):
@@ -381,7 +404,7 @@ def _RunTests():
 		f.close()
 
 	def test_apphive(file_path):
-		f = live_hives.open_hive_by_key(key_path)
+		f = live_hives.open_apphive_by_file(file_path)
 
 		assert f.read(4) == b'regf'
 		assert f.read(4) == f.read(4)

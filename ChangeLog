@@ -1,3 +1,15 @@
+Version: 1.0.30
+
+RegistryFile: define a flag for the layered keys feature and a method to check if this feature is enabled.
+RegistryRecords: define flags for the layered key bit fields.
+Registry: add methods to work with layered keys and their hives.
+RegistryLive: add a warning about hives in containers.
+yarp-print: add support for layered key bit fields.
+
+Minor changes.
+
+---
+
 Version: 1.0.29
 
 RegistryCarve: add support for carving transaction log entries.

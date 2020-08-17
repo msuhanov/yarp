@@ -77,6 +77,8 @@ hive_values_order = path.join(HIVES_DIR, 'ValuesOrderHive')
 
 log_with_remnant_data = path.join(HIVES_DIR, 'OldLogWithRemnantData')
 
+delta_hive = path.join(HIVES_DIR, 'System_Delta')
+
 hive_carving0 = path.join(HIVES_DIR, 'Carving', '0')
 hive_carving512 = path.join(HIVES_DIR, 'Carving', '512')
 hive_carving_fragments = path.join(HIVES_DIR, 'Carving', 'HiveAndFragments')
@@ -3119,4 +3121,44 @@ def test_log_carving_2():
 
 	assert cnt == 1
 
+	f.close()
+
+def test_layered_keys():
+	f = open(delta_hive, 'rb')
+	h = Registry.RegistryHive(f)
+
+	assert h.are_layered_keys_supported()
+
+	k = h.find_key('\\ControlSet001\\Services\\xboxgipsvc')
+	assert k.key_node.get_layered_key_bit_fields() == (RegistryRecords.KEY_INHERIT_CLASS | RegistryRecords.KEY_IS_SUPERSEDE_TREE)
+
+	assert k.flags_str() == 'InheritClass | IsSupersedeTree'
+
+	k = h.find_key('\\ControlSet001\\Services\\xboxgipsvc\\a_subkey')
+	assert k.key_node.get_layered_key_bit_fields() == RegistryRecords.KEY_IS_SUPERSEDE_TREE
+
+	assert k.flags_str() == 'IsSupersedeTree'
+
+	k = h.find_key('\\ControlSet001\\Services\\XBOXGIP')
+	assert k.key_node.get_layered_key_bit_fields() == RegistryRecords.KEY_IS_TOMBSTONE
+
+	assert k.flags_str() == 'IsTombstone'
+
+	v = h.find_key('\\ControlSet001\\Services\\XboxNetApiSvc').value('displayname')
+	assert v.key_value.get_flags() & RegistryRecords.VALUE_TOMBSTONE > 0
+	assert v.flags_str() == 'IsTombstone'
+
+	v = h.find_key('\\ControlSet001\\Services\\XboxNetApiSvc').value('start')
+	assert v.key_value.get_flags() & RegistryRecords.VALUE_TOMBSTONE == 0
+	assert v.flags_str() is None
+
+	f.close()
+
+	f = open(hive_strings, 'rb')
+	h = Registry.RegistryHive(f)
+
+	assert not h.are_layered_keys_supported()
+
+	k = h.find_key('kEy')
+	assert k.flags_str() is None
 	f.close()

@@ -42,6 +42,12 @@ BREAK_ON_SET_VALUE       = 0x20
 BREAK_ON_DELETE_VALUE    = 0x40
 BREAK_ON_KEY_VIRTUALIZE  = 0x80
 
+# Layered key flags.
+KEY_IS_TOMBSTONE       = 0x1 # This is a value (not a bit mask).
+KEY_IS_SUPERSEDE_LOCAL = 0x2 # This is a value (not a bit mask).
+KEY_IS_SUPERSEDE_TREE  = 0x3 # This is a value (not a bit mask).
+KEY_INHERIT_CLASS      = 0x80 # This is a bit mask (in our implementation, this is another field in Windows).
+
 # Key value flags.
 VALUE_COMP_NAME = 0x0001
 VALUE_TOMBSTONE = 0x0002

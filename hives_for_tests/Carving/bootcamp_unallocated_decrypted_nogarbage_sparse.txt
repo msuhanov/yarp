@@ -5,7 +5,7 @@
 5. The volume was decrypted (into an image file) using the 'dislocker' tool (an unreleased development version).
 6. After decryption, garbage blocks (blocks filled with null bytes in their "encrypted" state, they are "decrypted" into random data, such blocks originate from the Trim command) were zeroed out in the decrypted image.
 7. Then, unallocated space was extracted using the 'blkls' tool (The Sleuth Kit).
-8. Finally, null blocks (in the decrypted state of the unallocated space) were converted into sparse ranges. And the unallocate space was compressed into the TGZ archive.
+8. Finally, null blocks (in the decrypted state of the unallocated space) were converted into sparse ranges. And the unallocated space was compressed into the TGZ archive.
 9. You can find registry and other data in such unallocated space. For example (Windows 10 Timeline):
 
 00e615e0  00 00 00 00 5e dc ee 83  5f 04 7b 83 7b 22 74 79  |....^..._.{.{"ty|

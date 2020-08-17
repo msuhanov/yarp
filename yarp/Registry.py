@@ -41,6 +41,19 @@ HiveRoles = {
 'SYSCACHE': [ 'DefaultObjectStore' ]
 }
 
+VALUE_FLAGS = { # This contains only those flags we want to display to a user.
+RegistryRecords.VALUE_TOMBSTONE: 'VALUE_TOMBSTONE'
+}
+
+KEY_FLAGS = { # This contains only those flags we want to display to a user.
+RegistryRecords.KEY_IS_TOMBSTONE: 'IsTombstone',
+RegistryRecords.KEY_IS_SUPERSEDE_LOCAL: 'IsSupersedeLocal',
+RegistryRecords.KEY_IS_SUPERSEDE_TREE: 'IsSupersedeTree',
+}
+
+KEY_FLAG_INHERIT_CLASS = 'InheritClass'
+VALUE_FLAG_TOMBSTONE = 'IsTombstone'
+
 AutoRecoveryResult = namedtuple('AutoRecoveryResult', [ 'recovered', 'is_new_log', 'file_objects' ])
 
 class WalkException(RegistryException):
@@ -393,6 +406,11 @@ class RegistryHive(object):
 		self.registry_file.record_referenced_cells = False
 
 		self.registry_file.build_map_free()
+
+	def are_layered_keys_supported(self):
+		"""Check if layered keys are supported for this hive."""
+
+		return self.registry_file.baseblock.get_flags() & RegistryFile.HIVE_FLAG_LAYERED_KEYS_SUPPORTED
 
 class RegistryKey(object):
 	"""This is a high-level class for a registry key."""
@@ -801,6 +819,31 @@ class RegistryKey(object):
 			buf = self.get_cell(key_security_offset)
 			return RegistrySecurity(self.registry_file, buf)
 
+	def flags_raw(self):
+		"""Get and return layered key flags for this key (as an integer)."""
+
+		return self.key_node.get_layered_key_bit_fields()
+
+	def flags_str(self):
+		"""Get and return layered key flags for this key as a string (or None, if no flags are set)."""
+
+		flags = self.flags_raw()
+		flags_str_list = []
+
+		if flags & RegistryRecords.KEY_INHERIT_CLASS > 0:
+			flags_str_list.append(KEY_FLAG_INHERIT_CLASS)
+			flags = flags - RegistryRecords.KEY_INHERIT_CLASS
+
+		for i in KEY_FLAGS.keys():
+			if flags == i:
+				flags_str_list.append(KEY_FLAGS[i])
+				break
+
+		if len(flags_str_list) == 0:
+			return
+
+		return ' | '.join(flags_str_list)
+
 	def __str__(self):
 		return 'RegistryKey, name: {}, subkeys: {}, values: {}'.format(self.name(), self.subkeys_count(), self.values_count())
 
@@ -993,6 +1036,20 @@ class RegistryValue(object):
 				return sz_list
 
 		return data_raw
+
+	def flags_raw(self):
+		"""Get and return flags for this value (as an integer). This method returns all flags, not just layered flags."""
+
+		return self.key_value.get_flags()
+
+	def flags_str(self):
+		"""Get and return layered flags for this value as a string (or None, if no layered flags are set)."""
+
+		flags = self.flags_raw()
+		if flags & RegistryRecords.VALUE_TOMBSTONE > 0:
+			return VALUE_FLAG_TOMBSTONE
+
+		return
 
 	def __str__(self):
 		name = self.name()

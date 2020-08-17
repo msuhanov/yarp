@@ -51,6 +51,9 @@ def print_hive_information(hive):
 	except (ValueError, OverflowError):
 		pass
 
+	if hive.are_layered_keys_supported():
+		print('Layered keys are supported')
+
 	print()
 
 def print_value(value):
@@ -62,6 +65,10 @@ def print_value(value):
 
 	print('Value type: {}'.format(value.type_str()))
 	print('Data size: {}'.format(value.data_size()))
+
+	value_flags = value.flags_str()
+	if value_flags is not None:
+		print('Flags: {}'.format(value_flags))
 
 	try:
 		data = value.data()
@@ -94,6 +101,10 @@ def print_key(key):
 
 	print('Last written timestamp (UTC): {}'.format(key.last_written_timestamp()))
 	print('Access bits: {}'.format(key.access_bits()))
+
+	key_flags = key.flags_str()
+	if key_flags is not None:
+		print('Flags: {}'.format(key_flags))
 
 	security = key.security()
 	if security is not None:
@@ -141,6 +152,10 @@ def print_deleted_value(value):
 
 	print('Value type: {}'.format(value.type_str()))
 	print('Data size: {}'.format(value.data_size()))
+
+	value_flags = value.flags_str()
+	if value_flags is not None:
+		print('Flags: {}'.format(value_flags))
 
 	try:
 		data = value.data()
@@ -195,6 +210,10 @@ def print_deleted_key(key):
 		print('Last written timestamp is not plausible')
 
 	print('Access bits: {}'.format(key.access_bits()))
+
+	key_flags = key.flags_str()
+	if key_flags is not None:
+		print('Flags: {}'.format(key_flags))
 
 	try:
 		security = key.security()
