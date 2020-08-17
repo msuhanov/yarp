@@ -410,7 +410,7 @@ class RegistryHive(object):
 	def are_layered_keys_supported(self):
 		"""Check if layered keys are supported for this hive."""
 
-		return self.registry_file.baseblock.get_flags() & RegistryFile.HIVE_FLAG_LAYERED_KEYS_SUPPORTED
+		return self.registry_file.baseblock.get_flags() & RegistryFile.HIVE_FLAG_LAYERED_KEYS_SUPPORTED > 0
 
 class RegistryKey(object):
 	"""This is a high-level class for a registry key."""
@@ -1139,6 +1139,11 @@ class RegistryHiveTruncated(object):
 
 					if len(slack) >= 4: # Skip the slack space data if it is less than 4 bytes.
 						self.effective_slack.add(slack)
+
+	def are_layered_keys_supported(self):
+		"""Check if layered keys are supported for this hive."""
+
+		return self.registry_file.baseblock.get_flags() & RegistryFile.HIVE_FLAG_LAYERED_KEYS_SUPPORTED > 0
 
 class StandaloneRegistryKey(object):
 	"""This is a high-level class for a standalone registry key."""
