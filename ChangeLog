@@ -1,6 +1,6 @@
 Version: 1.0.30
 
-RegistryFile: define a flag for the layered keys feature and add a method to check if this feature is enabled.
+RegistryFile: define a flag for the layered keys feature.
 RegistryRecords: define flags for the layered key bit fields.
 Registry: add methods to work with layered keys and their hives.
 RegistryLive: add a warning about hives in containers.
