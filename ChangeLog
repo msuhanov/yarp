@@ -1,10 +1,10 @@
 Version: 1.0.30
 
-RegistryFile: define a flag for the layered keys feature and a method to check if this feature is enabled.
+RegistryFile: define a flag for the layered keys feature and add a method to check if this feature is enabled.
 RegistryRecords: define flags for the layered key bit fields.
 Registry: add methods to work with layered keys and their hives.
 RegistryLive: add a warning about hives in containers.
-yarp-print: add support for layered key bit fields.
+yarp-print: add support for the layered key bit fields.
 Minor changes.
 
 ---
@@ -12,7 +12,7 @@ Minor changes.
 Version: 1.0.29
 
 RegistryCarve: add support for carving transaction log entries.
-RegistryFile: add a function to rebuild transaction log entries to dummy a transaction log file.
+RegistryFile: add a function to rebuild transaction log entries to a dummy transaction log file.
 yarp-carver: add an option to carve transaction log entries.
 yarp-print: add support for extracting data from transaction log files alone (without primary files).
 Minor changes.
