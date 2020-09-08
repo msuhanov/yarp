@@ -701,9 +701,9 @@ class RegistryKey(object):
 	def subkey(self, name):
 		"""This method returns a subkey by its name (a RegistryKey object) or None, if not found."""
 
-		name = name.lower()
+		name = name.upper()
 		for curr_subkey in self.subkeys():
-			curr_name = curr_subkey.name().lower()
+			curr_name = curr_subkey.name().upper()
 			if name == curr_name:
 				return curr_subkey
 
@@ -736,7 +736,7 @@ class RegistryKey(object):
 				for curr_slack in slack_list:
 					self.effective_slack.add(curr_slack)
 
-				curr_name = curr_value.name().lower()
+				curr_name = curr_value.name().upper()
 				if curr_name not in values_names:
 					values_names.add(curr_name)
 				else:
@@ -797,9 +797,9 @@ class RegistryKey(object):
 		Remnant values are ignored by this method.
 		"""
 
-		name = name.lower()
+		name = name.upper()
 		for curr_value in self.values():
-			curr_name = curr_value.name().lower()
+			curr_name = curr_value.name().upper()
 			if name == curr_name:
 				return curr_value
 

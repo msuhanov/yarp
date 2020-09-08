@@ -1,3 +1,10 @@
+Version: 1.0.31
+
+Registry: use uppercase strings for case-insensitive comparison.
+Minor changes.
+
+---
+
 Version: 1.0.30
 
 RegistryFile: define a flag for the layered keys feature.
