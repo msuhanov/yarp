@@ -1,6 +1,6 @@
 The project is using the following optional third-party library:
 
-- Python-LLFUSE, author: Nikolaus Rath, URL: https://bitbucket.org/nikratio/python-llfuse/
+- Python-LLFUSE, author: Nikolaus Rath, URL: https://github.com/python-llfuse/python-llfuse/
 
 This third-party library includes the following license:
 
