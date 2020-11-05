@@ -47,9 +47,24 @@ def Marvin32(Buffer, Seed = MARVIN32_SEED):
 	"""Calculate and return the Marvin32 hash (64 bits) of Buffer."""
 
 	def ROTL(X, N, W):
+     """
+     Returns the number of the number of a number of x.
+
+     Args:
+         X: (array): write your description
+         N: (array): write your description
+         W: (array): write your description
+     """
 		return (X.value << N) | (X.value >> (W - N))
 
 	def Mix(State, Val):
+     """
+     Convert a 32 bit value ) tuple.
+
+     Args:
+         State: (todo): write your description
+         Val: (float): write your description
+     """
 		lo, hi = State
 		lo.value += Val.value
 		hi.value ^= lo.value
@@ -109,108 +124,264 @@ class ReadException(RegistryException):
 	"""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class NotSupportedException(RegistryException):
 	"""This exception is raised when something is not supported."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class BaseBlockException(RegistryException):
 	"""This exception is raised when something is invalid in a base block."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class FileSizeException(RegistryException):
 	"""This exception is raised when a file has an obviously invalid size."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class HiveBinException(RegistryException):
 	"""This exception is raised when something is invalid in a hive bin."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class HiveCellException(RegistryException):
 	"""This exception is raised when something is wrong with a hive cell."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class DirtyVectorException(RegistryException):
 	"""This exception is raised when something is invalid in a dirty vector."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class DirtyPageException(RegistryException):
 	"""This exception is raised when a dirty page is invalid (truncated)."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class LogEntryException(RegistryException):
 	"""This exception is raised when a log entry is invalid."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class RecoveryException(RegistryException):
 	"""This exception is raised when a recovery error has occurred."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class NotEligibleException(RegistryException):
 	"""This exception is raised when a transaction log file cannot be applied to a primary file."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class CellOffsetException(RegistryException):
 	"""This exception is raised when an invalid cell has been requested."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class RegistryFile(object):
@@ -219,14 +390,36 @@ class RegistryFile(object):
 	"""
 
 	def __init__(self, file_object, file_offset = 0):
+     """
+     Initialize the file object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         file_offset: (todo): write your description
+     """
 		self.file_object = file_object
 		self.file_offset = file_offset
 
 	def get_file_size(self):
+     """
+     Returns the size of the file.
+
+     Args:
+         self: (str): write your description
+     """
 		self.file_object.seek(0, 2)
 		return self.file_object.tell()
 
 	def read_binary(self, pos, length):
+     """
+     Reads at most length bytes from the stream.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+         length: (int): write your description
+     """
 		try:
 			self.file_object.seek(self.file_offset + pos)
 			b = self.file_object.read(length)
@@ -239,30 +432,83 @@ class RegistryFile(object):
 		raise ReadException('Cannot read data (expected: {} bytes, read: {} bytes)'.format(length, len(b)))
 
 	def write_binary(self, pos, data):
+     """
+     Write data to - endian bytes at posix.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+         data: (todo): write your description
+     """
 		self.file_object.seek(self.file_offset + pos)
 		self.file_object.write(data)
 
 	def read_uint32(self, pos):
+     """
+     Read 4 bytes as an unsigned integer
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+     """
 		b = self.read_binary(pos, 4)
 		return unpack('<L', b)[0]
 
 	def write_uint32(self, pos, i):
+     """
+     Write a 4 bytes to the stream.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+         i: (todo): write your description
+     """
 		b = pack('<L', i)
 		self.write_binary(pos, b)
 
 	def read_int32(self, pos):
+     """
+     Reads 4 bytes as an unsigned integer.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+     """
 		b = self.read_binary(pos, 4)
 		return unpack('<l', b)[0]
 
 	def write_int32(self, pos, i):
+     """
+     Write 2 bytes to the stream.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+         i: (todo): write your description
+     """
 		b = pack('<l', i)
 		self.write_binary(pos, b)
 
 	def read_uint64(self, pos):
+     """
+     Read 4 bytes as an unsigned integer.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+     """
 		b = self.read_binary(pos, 8)
 		return unpack('<Q', b)[0]
 
 	def write_uint64(self, pos, i):
+     """
+     Write 2 bytes as an unsigned integer.
+
+     Args:
+         self: (todo): write your description
+         pos: (int): write your description
+         i: (todo): write your description
+     """
 		b = pack('<Q', i)
 		self.write_binary(pos, b)
 
@@ -302,6 +548,14 @@ class BaseBlock(RegistryFile):
 	"""True if the old cell format is used in a primary file."""
 
 	def __init__(self, file_object, no_hive_bins = False):
+     """
+     Initialize the object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         no_hive_bins: (todo): write your description
+     """
 		super(BaseBlock, self).__init__(file_object)
 
 		signature = self.get_signature()
@@ -367,85 +621,240 @@ class BaseBlock(RegistryFile):
 			raise BaseBlockException('Invalid hive bins data size: {}'.format(hbins_data_size))
 
 	def get_signature(self):
+     """
+     Return the signature of the signature.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(0, 4)
 
 	def get_primary_sequence_number(self):
+     """
+     Reads the primary sequence number.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(4)
 
 	def get_secondary_sequence_number(self):
+     """
+     Reads the secondary secondary integer number.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(8)
 
 	def write_synchronized_sequence_numbers(self, sequence_number):
+     """
+     Write a sequence sequence sequence sequence.
+
+     Args:
+         self: (todo): write your description
+         sequence_number: (int): write your description
+     """
 		self.write_uint32(4, sequence_number)
 		self.write_uint32(8, sequence_number)
 
 	def get_last_written_timestamp(self):
+     """
+     Get the last timestamp.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint64(12)
 
 	def get_major_version(self):
+     """
+     Get the major minor version.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(20)
 
 	def get_minor_version(self):
+     """
+     Get the minor minor minor minor version.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(24)
 
 	def get_file_type(self):
+     """
+     Get the type of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(28)
 
 	def write_file_type(self, file_type):
+     """
+     Writes a file type.
+
+     Args:
+         self: (todo): write your description
+         file_type: (str): write your description
+     """
 		self.write_uint32(28, file_type)
 
 	def get_file_format(self):
+     """
+     Returns the format of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(32)
 
 	def get_root_cell_offset(self):
+     """
+     Returns the offset of the cell.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(36)
 
 	def get_hbins_data_size(self):
+     """
+     Reads a 2 bytes size of the size of the layer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(40)
 
 	def write_hbins_data_size(self, hbins_data_size):
+     """
+     Write bytes to the hdf5 file.
+
+     Args:
+         self: (todo): write your description
+         hbins_data_size: (int): write your description
+     """
 		self.write_uint32(40, hbins_data_size)
 
 	def get_clustering_factor(self):
+     """
+     Reads the factor
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(44)
 
 	def get_filename(self):
+     """
+     Returns the filename of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(48, 64)
 
 	def get_checksum(self):
+     """
+     Returns the checksum of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(508)
 
 	def write_checksum(self, checksum):
+     """
+     Write checksum.
+
+     Args:
+         self: (todo): write your description
+         checksum: (bool): write your description
+     """
 		self.write_uint32(508, checksum)
 
 	def get_boot_type(self):
+     """
+     Returns the type of the boot type.
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
 		return self.read_uint32(4088)
 
 	def get_boot_recover(self):
+     """
+     Retrieves boot device boot
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
 		return self.read_uint32(4092)
 
 	def get_rmid(self):
+     """
+     Get the rmid rmid.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(112, 16)
 
 	def get_logid(self):
+     """
+     : return the logid
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(128, 16)
 
 	def get_flags(self):
+     """
+     Read flags.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(144)
 
 	def write_flags(self, flags):
+     """
+     Writes a tty.
+
+     Args:
+         self: (todo): write your description
+         flags: (todo): write your description
+     """
 		self.write_uint32(144, flags)
 
 	def get_tmid(self):
+     """
+     Get the binary tmid.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(148, 16)
 
 	def get_guid_signature(self):
+     """
+     : return : class : str
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(164, 4)
 
 	def is_hive_rmtm(self):
@@ -454,6 +863,12 @@ class BaseBlock(RegistryFile):
 		return self.get_guid_signature() == b'rmtm'
 
 	def get_last_reorganized_timestamp(self):
+     """
+     Return last timestamp of the last timestamp.
+
+     Args:
+         self: (todo): write your description
+     """
 		timestamp = self.read_uint64(168)
 		if timestamp & 3 == 0 or timestamp & 3 == 3:
 			return
@@ -461,29 +876,59 @@ class BaseBlock(RegistryFile):
 		return timestamp
 
 	def get_last_reorganize_type(self):
+     """
+     Get the last last_reorganize_type.
+
+     Args:
+         self: (todo): write your description
+     """
 		timestamp = self.get_last_reorganized_timestamp()
 		if timestamp is not None:
 			return timestamp & 3
 
 	def get_thawtmid(self):
+     """
+     Return the binary threshold.
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
 		return self.read_binary(4040, 16)
 
 	def get_thawrmid(self):
+     """
+     Return the binary threshold.
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
 		return self.read_binary(4056, 16)
 
 	def get_thawlogid(self):
+     """
+     Returns the binary id of the binary file.
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
 		return self.read_binary(4072, 16)
 
 	def calculate_checksum(self):
+     """
+     Calculate the checksum.
+
+     Args:
+         self: (todo): write your description
+     """
 		csum = 0
 
 		i = 0
@@ -505,18 +950,48 @@ class BaseBlock(RegistryFile):
 		return self.calculate_checksum() == self.get_checksum()
 
 	def update_checksum(self):
+     """
+     Update the checksum.
+
+     Args:
+         self: (todo): write your description
+     """
 		self.write_checksum(self.calculate_checksum())
 
 	def get_offreg_signature_old(self):
+     """
+     Return signature signature.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(168, 4)
 
 	def get_offreg_flags_old(self):
+     """
+     Reads the flags flags
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(172)
 
 	def get_offreg_signature_new(self):
+     """
+     Return a new signature
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(176, 4)
 
 	def get_offreg_flags_new(self):
+     """
+     Gets the new flags.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(180)
 
 	def is_hive_serialized_using_offreg(self):
@@ -531,6 +1006,12 @@ class BaseBlock(RegistryFile):
 		return False
 
 	def get_offreg_serialization_timestamp(self):
+     """
+     Get the serialized timestamp.
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.is_primary_file:
 			return
 
@@ -548,6 +1029,16 @@ class HiveBin(RegistryFile):
 	"""A list of cells (HiveCell) in this hive bin."""
 
 	def __init__(self, file_object, file_offset, tolerate_cell_errors = False, use_old_cell_format = False):
+     """
+     Initialize the cell object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         file_offset: (todo): write your description
+         tolerate_cell_errors: (float): write your description
+         use_old_cell_format: (bool): write your description
+     """
 		super(HiveBin, self).__init__(file_object, file_offset)
 
 		signature = self.get_signature()
@@ -599,24 +1090,66 @@ class HiveBin(RegistryFile):
 			curr_pos += cell_absolute_size
 
 	def get_signature(self):
+     """
+     Return the signature of the signature.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(0, 4)
 
 	def get_offset(self):
+     """
+     Reads a 2 - endian.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(4)
 
 	def get_size(self):
+     """
+     Returns the size of the layer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(8)
 
 	def get_reserved(self):
+     """
+     Reads the binary buffer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(12, 8)
 
 	def get_timestamp(self):
+     """
+     Returns the timestamp.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint64(20)
 
 	def get_spare(self):
+     """
+     Reads a 2 byte array as an unsigned integer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(28)
 
 	def get_memalloc(self):
+     """
+     Returns the amount of memory in the stream.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(28) # The same offset as in the previous field.
 
 class HiveCell(RegistryFile):
@@ -625,6 +1158,15 @@ class HiveCell(RegistryFile):
 	"""
 
 	def __init__(self, file_object, file_offset, use_old_cell_format = False):
+     """
+     Initialize the cell.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         file_offset: (todo): write your description
+         use_old_cell_format: (bool): write your description
+     """
 		super(HiveCell, self).__init__(file_object, file_offset)
 
 		self.use_old_cell_format = use_old_cell_format
@@ -646,12 +1188,30 @@ class HiveCell(RegistryFile):
 			raise HiveCellException('Invalid cell size (absolute): {}'.format(cell_absolute_size))
 
 	def get_size(self):
+     """
+     Returns the size of the layer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_int32(0)
 
 	def get_absolute_size(self):
+     """
+     Returns the absolute size of this node.
+
+     Args:
+         self: (todo): write your description
+     """
 		return abs(self.get_size())
 
 	def is_allocated(self):
+     """
+     : return : true if all of the currently stored.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.get_size() < 0
 
 	def get_last(self):
@@ -663,6 +1223,12 @@ class HiveCell(RegistryFile):
 		return self.read_uint32(4)
 
 	def get_cell_data(self):
+     """
+     Return the binary data of the cell
+
+     Args:
+         self: (todo): write your description
+     """
 		if not self.use_old_cell_format:
 			cell_data_offset = 4
 		else:
@@ -677,6 +1243,15 @@ class DirtyVector(RegistryFile):
 	"""Contents of a bitmap."""
 
 	def __init__(self, file_object, file_offset, hbins_data_size):
+     """
+     Initialize the signature.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         file_offset: (todo): write your description
+         hbins_data_size: (int): write your description
+     """
 		super(DirtyVector, self).__init__(file_object, file_offset)
 
 		signature = self.get_signature()
@@ -687,6 +1262,12 @@ class DirtyVector(RegistryFile):
 		self.bitmap = bytearray(self.read_binary(4, self.vector_length))
 
 	def get_signature(self):
+     """
+     Return the signature of the signature.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(0, 4)
 
 	def dirty_pages_meta(self):
@@ -712,6 +1293,16 @@ class DirtyPage(RegistryFile):
 	page_size = None
 
 	def __init__(self, file_object, log_file_offset, page_size, primary_file_offset):
+     """
+     Initialize the page.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         log_file_offset: (str): write your description
+         page_size: (int): write your description
+         primary_file_offset: (str): write your description
+     """
 		super(DirtyPage, self).__init__(file_object, log_file_offset)
 
 		self.page_size = page_size
@@ -719,6 +1310,12 @@ class DirtyPage(RegistryFile):
 		self.log_file_offset = log_file_offset
 
 	def get_bytes(self):
+     """
+     Get the next page from the page.
+
+     Args:
+         self: (todo): write your description
+     """
 		bytes_ = self.read_binary(0, self.page_size)
 		if len(bytes_) != self.page_size:
 			raise DirtyPageException('Truncated dirty page')
@@ -735,6 +1332,13 @@ class OldLogFile(object):
 	"""A dirty vector in a log file (a DirtyVector object)."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the database.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.file_object = file_object
 
 		self.baseblock = BaseBlock(self.file_object)
@@ -752,6 +1356,12 @@ class OldLogFile(object):
 		self.dirtyvector = DirtyVector(self.file_object, BASE_BLOCK_LENGTH_LOG, self.baseblock.effective_hbins_data_size)
 
 	def get_dirty_pages_starting_offset(self):
+     """
+     Returns the number of - pages pages in the sector
+
+     Args:
+         self: (todo): write your description
+     """
 		offset_unaligned = BASE_BLOCK_LENGTH_LOG + len(b'DIRT') + self.baseblock.effective_hbins_data_size // 4096
 		sector_size = 512 # We do not expect other values (even when the sector size is not 512 bytes).
 
@@ -798,6 +1408,15 @@ class LogEntry(RegistryFile):
 	"""
 
 	def __init__(self, file_object, file_offset, expected_sequence_number):
+     """
+     Initialize data from file.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         file_offset: (todo): write your description
+         expected_sequence_number: (int): write your description
+     """
 		super(LogEntry, self).__init__(file_object, file_offset)
 
 		signature = self.get_signature()
@@ -824,34 +1443,94 @@ class LogEntry(RegistryFile):
 			raise LogEntryException('Unexpected sequence number: {} != {}'.format(sequence_number, expected_sequence_number))
 
 	def get_signature(self):
+     """
+     Return the signature of the signature.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_binary(0, 4)
 
 	def get_size(self):
+     """
+     Returns the size of the layer.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(4)
 
 	def get_flags(self):
+     """
+     Read flags as a 4 bytes.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(8)
 
 	def get_sequence_number(self):
+     """
+     Reads the integer number.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(12)
 
 	def get_hbins_data_size(self):
+     """
+     Reads next byte size from the stream
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(16)
 
 	def get_dirty_pages_count(self):
+     """
+     Return total number of pages.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint32(20)
 
 	def get_hash_1(self):
+     """
+     Returns the hash hash of the value.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint64(24)
 
 	def get_hash_2(self):
+     """
+     Returns the hash_2.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.read_uint64(32)
 
 	def calculate_hash_1(self):
+     """
+     Calculate the hash of the binary data.
+
+     Args:
+         self: (todo): write your description
+     """
 		b = bytearray(self.read_binary(40, self.get_size() - 40))
 		return Marvin32(b)
 
 	def calculate_hash_2(self):
+     """
+     Calculate the hash of the binary.
+
+     Args:
+         self: (todo): write your description
+     """
 		b = bytearray(self.read_binary(0, 32))
 		return Marvin32(b)
 
@@ -861,6 +1540,12 @@ class LogEntry(RegistryFile):
 		return self.get_hash_2() == self.calculate_hash_2() and self.get_hash_1() == self.calculate_hash_1()
 
 	def get_dirty_pages_starting_offset(self):
+     """
+     Returns the number of pages
+
+     Args:
+         self: (todo): write your description
+     """
 		return 40 + self.get_dirty_pages_count() * 8
 
 	def dirty_pages_references(self):
@@ -903,6 +1588,13 @@ class NewLogFile(object):
 	"""A base block in a log file (a BaseBlock object)."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the file object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.file_object = file_object
 
 		self.baseblock = BaseBlock(self.file_object)
@@ -963,6 +1655,12 @@ class NewLogFile(object):
 		"""This method yields LogEntry objects for remnant (but valid) log entries (if any)."""
 
 		def parse_log_entry_header(buf):
+      """
+      Parse log header.
+
+      Args:
+          buf: (todo): write your description
+      """
 			if len(buf) < 40:
 				return (False, None)
 
@@ -1096,6 +1794,14 @@ class PrimaryFile(object):
 	"""A map of free (unallocated, unreferenced) cells (empty by default, see the build_map_free() method)."""
 
 	def __init__(self, file_object, tolerate_minor_errors = True):
+     """
+     Initialize the grid.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         tolerate_minor_errors: (float): write your description
+     """
 		self.file_object = file_object
 		self.writable = False
 		self.file = RegistryFile(file_object)
@@ -1362,6 +2068,13 @@ class PrimaryFile(object):
 		"""
 
 		def is_starting_log(this_sequence_number, another_sequence_number):
+      """
+      Determine if a log is a positive number.
+
+      Args:
+          this_sequence_number: (int): write your description
+          another_sequence_number: (int): write your description
+      """
 			if this_sequence_number >= another_sequence_number:
 				delta = this_sequence_number - another_sequence_number
 				starting = False
@@ -1427,6 +2140,13 @@ class PrimaryFileTruncated(object):
 	"""A map of free (unallocated only) cells."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the network.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.file_object = file_object
 		self.writable = False
 		self.file = RegistryFile(file_object)

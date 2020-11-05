@@ -43,9 +43,22 @@ class ValidationException(Registry.RegistryException):
 	"""This exception is raised when a reconstructed hive is invalid."""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 def CheckBaseBlockOfPrimaryFile(Buffer):
@@ -194,7 +207,20 @@ def ValidateRandomCells(Buffer, OldCells = False):
 	"""
 
 	def Walk(Buffer, OldCells):
+     """
+     Determines whether the given buffer is a binary.
+
+     Args:
+         Buffer: (todo): write your description
+         OldCells: (todo): write your description
+     """
 		def ValidateLargeCell(Buffer):
+      """
+      Checks if a buffer is a binary message.
+
+      Args:
+          Buffer: (todo): write your description
+      """
 			if len(Buffer) < 72:
 				return True
 
@@ -285,13 +311,34 @@ class DiskImage(object):
 	"""This class is used to read from a disk image (or a similar source that is aligned to 512 bytes)."""
 
 	def __init__(self, file_object):
+     """
+     Initialize a file object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.file_object = file_object
 
 	def size(self):
+     """
+     Returns the size of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		self.file_object.seek(0, 2)
 		return self.file_object.tell()
 
 	def read(self, pos, size):
+     """
+     Reads a file position.
+
+     Args:
+         self: (todo): write your description
+         pos: (todo): write your description
+         size: (int): write your description
+     """
 		self.file_object.seek(pos)
 		return self.file_object.read(size)
 
@@ -305,6 +352,13 @@ class MemoryImage(object):
 	mode = None
 
 	def __init__(self, file_object_or_bytes_object):
+     """
+     Return a file object.
+
+     Args:
+         self: (todo): write your description
+         file_object_or_bytes_object: (todo): write your description
+     """
 		try:
 			file_object_or_bytes_object.read
 			file_object_or_bytes_object.seek
@@ -326,6 +380,12 @@ class MemoryImage(object):
 			self.mode = 2
 
 	def size(self):
+     """
+     Returns the size of the file.
+
+     Args:
+         self: (todo): write your description
+     """
 		if self.mode == 2:
 			return self.data.size()
 		elif self.mode == 1:
@@ -335,6 +395,14 @@ class MemoryImage(object):
 			return self.file_object.tell()
 
 	def read(self, pos, size):
+     """
+     Reads at most common size bytes from the file.
+
+     Args:
+         self: (todo): write your description
+         pos: (todo): write your description
+         size: (int): write your description
+     """
 		if self.mode == 1 or self.mode == 2:
 			return self.data[pos : pos + size]
 		else:
@@ -348,6 +416,13 @@ class Carver(DiskImage):
 	"""A progress callback. Arguments: bytes_read, bytes_total."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the file object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		super(Carver, self).__init__(file_object)
 
 		self.callback_threshold = 2*1024*1024*1024 # In bytes.
@@ -694,6 +769,13 @@ class HiveReconstructor(object):
 	"""A progress callback (called before a truncated primary file is processed). No arguments."""
 
 	def __init__(self, file_object):
+     """
+     Initialize file object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.file_object = file_object
 		self.carver = Carver(self.file_object)
 
@@ -1061,6 +1143,12 @@ class HiveReconstructor(object):
 
 
 		def find_largest_fragment(hbin_start):
+      """
+      Finds a list of fragment fragment fragment return a list of fragment fragments.
+
+      Args:
+          hbin_start: (int): write your description
+      """
 			fragments = []
 			for fragment in self.hbin_fragments[:]:
 				if fragment.hbin_start == hbin_start:
@@ -1074,6 +1162,12 @@ class HiveReconstructor(object):
 			return largest_fragment
 
 		def find_second_largest_fragment(hbin_start):
+      """
+      Finds a list of fragments in the fragment.
+
+      Args:
+          hbin_start: (int): write your description
+      """
 			fragments = []
 			for fragment in self.hbin_fragments[:]:
 				if fragment.hbin_start == hbin_start:
@@ -1212,6 +1306,13 @@ class NTFSAwareCarver(DiskImage):
 	"""A progress callback. Arguments: bytes_read, bytes_total. Note: the carver may read a disk image twice."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the object.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		super(NTFSAwareCarver, self).__init__(file_object)
 
 		self.regf_fragments = []
@@ -1412,6 +1513,13 @@ class MemoryCarver(MemoryImage):
 	"""A progress callback. Arguments: bytes_read, bytes_total."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the internal method.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		super(MemoryCarver, self).__init__(file_object)
 
 		self.callback_threshold = 1*1024*1024 # In bytes.

@@ -95,11 +95,26 @@ class NTFileLikeObject(object):
 	"""This class implements a read-only file-like object for a given file handle (as returned by the CreateFile() routine)."""
 
 	def __init__(self, handle):
+     """
+     Initialize handle.
+
+     Args:
+         self: (todo): write your description
+         handle: (todo): write your description
+     """
 		self.handle = handle
 		self.max_size = self.seek(0, 2)
 		self.seek(0, 0)
 
 	def seek(self, offset, whence = 0):
+     """
+     Seek to the file offset.
+
+     Args:
+         self: (todo): write your description
+         offset: (int): write your description
+         whence: (str): write your description
+     """
 		offset = ctypes.windll.kernel32.SetFilePointer(self.handle, offset, None, whence)
 		if offset == _INVALID_SET_FILE_POINTER:
 			raise OSError('The SetFilePointer() routine failed')
@@ -107,9 +122,22 @@ class NTFileLikeObject(object):
 		return offset
 
 	def tell(self):
+     """
+     Return the current file.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self.seek(0, 1)
 
 	def read(self, size = None):
+     """
+     Reads up to size.
+
+     Args:
+         self: (todo): write your description
+         size: (int): write your description
+     """
 		if size is None or size < 0:
 			size = self.max_size - self.tell()
 
@@ -127,6 +155,12 @@ class NTFileLikeObject(object):
 		return buffer.raw[ : size_out.value]
 
 	def close(self):
+     """
+     Closes the kernel.
+
+     Args:
+         self: (todo): write your description
+     """
 		ctypes.windll.kernel32.CloseHandle(self.handle)
 
 class RegistryHivesLive(object):
@@ -138,6 +172,12 @@ class RegistryHivesLive(object):
 	"""
 
 	def __init__(self):
+     """
+     Initialize the backend.
+
+     Args:
+         self: (todo): write your description
+     """
 		self._src_handle = None
 		self._dst_handle = None
 
@@ -388,6 +428,12 @@ def _RunTests():
 	live_hives = RegistryHivesLive()
 
 	def test_hive(key_path):
+     """
+     Reads a key from hive.
+
+     Args:
+         key_path: (str): write your description
+     """
 		f = live_hives.open_hive_by_key(key_path)
 
 		assert f.read(4) == b'regf'
@@ -404,6 +450,12 @@ def _RunTests():
 		f.close()
 
 	def test_apphive(file_path):
+     """
+     Test for apphive.
+
+     Args:
+         file_path: (str): write your description
+     """
 		f = live_hives.open_apphive_by_file(file_path)
 
 		assert f.read(4) == b'regf'

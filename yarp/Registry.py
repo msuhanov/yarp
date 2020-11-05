@@ -62,9 +62,22 @@ class WalkException(RegistryException):
 	"""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 class AutoRecoveryException(RegistryException):
@@ -73,9 +86,22 @@ class AutoRecoveryException(RegistryException):
 	"""
 
 	def __init__(self, value):
+     """
+     Initializes the value.
+
+     Args:
+         self: (todo): write your description
+         value: (todo): write your description
+     """
 		self._value = value
 
 	def __str__(self):
+     """
+     Return a repr representation of this object.
+
+     Args:
+         self: (todo): write your description
+     """
 		return repr(self._value)
 
 def DecodeFiletime(Timestamp):
@@ -136,6 +162,12 @@ def GuessHiveRole(file_object):
 	"""
 
 	def collect_keys_normal(file_object):
+     """
+     Collects all keys in the given a file object.
+
+     Args:
+         file_object: (todo): write your description
+     """
 		keys = []
 
 		hive = RegistryHive(file_object)
@@ -145,6 +177,12 @@ def GuessHiveRole(file_object):
 		return keys
 
 	def collect_keys_truncated(file_object):
+     """
+     Collect keys from the keys in a key.
+
+     Args:
+         file_object: (todo): write your description
+     """
 		keys = []
 
 		hive = RegistryHiveTruncated(file_object)
@@ -205,6 +243,14 @@ class RegistryHive(object):
 	"""A set of data strings from different slack space locations to be used in the deleted data recovery."""
 
 	def __init__(self, file_object, tolerate_minor_errors = True):
+     """
+     Initialize the registry.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+         tolerate_minor_errors: (float): write your description
+     """
 		self.registry_file = RegistryFile.PrimaryFile(file_object, tolerate_minor_errors)
 		self.tolerate_minor_errors = tolerate_minor_errors
 		self.effective_slack = set()
@@ -280,6 +326,13 @@ class RegistryHive(object):
 		"""
 
 		def try_log(file_object_log, log_class):
+      """
+      Try to log a file.
+
+      Args:
+          file_object_log: (todo): write your description
+          log_class: (todo): write your description
+      """
 			if file_object_log is None:
 				return
 
@@ -380,6 +433,12 @@ class RegistryHive(object):
 		"""Visit and record each referenced cell, collect the slack space data. This will also ensure that a hive is consistent."""
 
 		def process_key(key):
+      """
+      Process a security key.
+
+      Args:
+          key: (todo): write your description
+      """
 			security = key.security()
 			if security is not None:
 				security_descriptor = security.descriptor()
@@ -573,6 +632,12 @@ class RegistryKey(object):
 		subkeys_names = set()
 
 		def process_leaf(leaf_buf):
+      """
+      Process the subtree.
+
+      Args:
+          leaf_buf: (todo): write your description
+      """
 			leaf_signature = leaf_buf[ : 2]
 
 			if leaf_signature == b'li':
@@ -845,6 +910,12 @@ class RegistryKey(object):
 		return ' | '.join(flags_str_list)
 
 	def __str__(self):
+     """
+     Returns a string representation of this key.
+
+     Args:
+         self: (todo): write your description
+     """
 		return 'RegistryKey, name: {}, subkeys: {}, values: {}'.format(self.name(), self.subkeys_count(), self.values_count())
 
 class RegistrySecurity(object):
@@ -857,6 +928,14 @@ class RegistrySecurity(object):
 	"""A KeySecurity object."""
 
 	def __init__(self, primary_file, buf):
+     """
+     Initialize the registry.
+
+     Args:
+         self: (todo): write your description
+         primary_file: (str): write your description
+         buf: (list): write your description
+     """
 		self.registry_file = primary_file
 
 		self.key_security = RegistryRecords.KeySecurity(buf)
@@ -1052,6 +1131,12 @@ class RegistryValue(object):
 		return
 
 	def __str__(self):
+     """
+     Str : str representation of the data type.
+
+     Args:
+         self: (todo): write your description
+     """
 		name = self.name()
 		if len(name) > 0:
 			return 'RegistryValue, name: {}, data type: {}, data size: {}'.format(name, self.type_str(), self.data_size())
@@ -1068,6 +1153,13 @@ class RegistryHiveTruncated(object):
 	"""A set of data strings from different slack space locations to be used in the deleted data recovery."""
 
 	def __init__(self, file_object):
+     """
+     Initialize the registry.
+
+     Args:
+         self: (todo): write your description
+         file_object: (todo): write your description
+     """
 		self.registry_file = RegistryFile.PrimaryFileTruncated(file_object)
 		self.effective_slack = set()
 
@@ -1149,6 +1241,13 @@ class StandaloneRegistryKey(object):
 	"""This is a high-level class for a standalone registry key."""
 
 	def __init__(self, key_node):
+     """
+     Initialize a new key.
+
+     Args:
+         self: (todo): write your description
+         key_node: (str): write your description
+     """
 		self.key_node = key_node
 
 	def last_written_timestamp(self):
@@ -1190,12 +1289,25 @@ class StandaloneRegistryKey(object):
 		return self.key_node.get_key_values_count()
 
 	def __str__(self):
+     """
+     Returns a string representation of this key.
+
+     Args:
+         self: (todo): write your description
+     """
 		return 'StandaloneRegistryKey, name: {}, subkeys: {}, values: {}'.format(self.name(), self.subkeys_count(), self.values_count())
 
 class StandaloneRegistryValue(object):
 	"""This is a high-level class for a standalone registry value."""
 
 	def __init__(self, key_value):
+     """
+     Initialize a key_value.
+
+     Args:
+         self: (todo): write your description
+         key_value: (str): write your description
+     """
 		self.key_value = key_value
 
 	def name(self):
@@ -1239,6 +1351,12 @@ class StandaloneRegistryValue(object):
 		return
 
 	def __str__(self):
+     """
+     Str : str representation of the data type.
+
+     Args:
+         self: (todo): write your description
+     """
 		name = self.name()
 		if len(name) > 0:
 			return 'StandaloneRegistryValue, name: {}, data type: {}, data size: {}'.format(name, self.type_str(), self.data_size())
