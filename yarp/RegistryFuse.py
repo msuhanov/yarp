@@ -19,6 +19,15 @@ class YarpFS(llfuse.Operations):
 	"""This is an implementation of a FUSE file system (llfuse) for a registry hive."""
 
 	def __init__(self, primary_path, enable_cache = True, character_encoding = 'utf-8'):
+     """
+     Initialize primary yarp.
+
+     Args:
+         self: (todo): write your description
+         primary_path: (str): write your description
+         enable_cache: (bool): write your description
+         character_encoding: (str): write your description
+     """
 		super(YarpFS, self).__init__()
 
 		# Open the primary file.
@@ -83,7 +92,20 @@ class YarpFS(llfuse.Operations):
 		"""A string used to replace a null byte in a name."""
 
 	def _yarp_validate_hive(self, registry_hive):
+     """
+     Validate the yarp configuration.
+
+     Args:
+         self: (todo): write your description
+         registry_hive: (todo): write your description
+     """
 		def process_key(key):
+      """
+      Process a key.
+
+      Args:
+          key: (todo): write your description
+      """
 			classname = key.classname()
 
 			v_set = set()
@@ -126,9 +148,23 @@ class YarpFS(llfuse.Operations):
 		process_key(registry_hive.root_key())
 
 	def _yarp_convert_timestamp(self, filetime):
+     """
+     Convert yarp filetime to yarp format.
+
+     Args:
+         self: (todo): write your description
+         filetime: (str): write your description
+     """
 		return filetime * 100 - 11644473600 * 1000000000
 
 	def _yarp_is_key(self, cell_relative_offset):
+     """
+     Returns true if the cell is a key
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		try:
 			buf = self._yarp_get_cell(cell_relative_offset)
 		except RegistryFile.CellOffsetException:
@@ -137,6 +173,13 @@ class YarpFS(llfuse.Operations):
 		return buf[ : 2] == b'nk'
 
 	def _yarp_is_value(self, cell_relative_offset):
+     """
+     Returns true if the cell is a yarp value.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		try:
 			buf = self._yarp_get_cell(cell_relative_offset)
 		except RegistryFile.CellOffsetException:
@@ -145,6 +188,13 @@ class YarpFS(llfuse.Operations):
 		return buf[ : 2] == b'vk'
 
 	def _yarp_is_virtual_inode(self, cell_relative_offset):
+     """
+     Returns true if this cell is in this cell
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		try:
 			cell_signature = self._yarp_get_cell(cell_relative_offset)[ : 2]
 		except RegistryFile.CellOffsetException:
@@ -153,6 +203,13 @@ class YarpFS(llfuse.Operations):
 		return cell_signature == b'vk' or cell_signature == b'nk'
 
 	def _yarp_get_leaf(self, list_data):
+     """
+     Returns the yarp of the yarp.
+
+     Args:
+         self: (todo): write your description
+         list_data: (list): write your description
+     """
 		signature = list_data[ : 2]
 		if signature == b'li':
 			return RegistryRecords.IndexLeaf(list_data)
@@ -162,6 +219,15 @@ class YarpFS(llfuse.Operations):
 			return RegistryRecords.HashLeaf(list_data)
 
 	def _yarp_posixify_name(self, name, cell_relative_offset, is_value_name):
+     """
+     Return the name of the yarp for the yarp name.
+
+     Args:
+         self: (todo): write your description
+         name: (str): write your description
+         cell_relative_offset: (bool): write your description
+         is_value_name: (str): write your description
+     """
 		if is_value_name:
 			conflict_suffix = self.conflict_suffix_value
 		else:
@@ -189,6 +255,13 @@ class YarpFS(llfuse.Operations):
 		return name
 
 	def _yarp_deposixify_name(self, name):
+     """
+     Return a record name of a record.
+
+     Args:
+         self: (todo): write your description
+         name: (str): write your description
+     """
 		record_type = 0 # 0: unknown; 1: key; 2: value.
 
 		if name == self.default_name: # This is an empty name.
@@ -212,12 +285,27 @@ class YarpFS(llfuse.Operations):
 		return (name, record_type)
 
 	def _yarp_get_cell(self, cell_relative_offset):
+     """
+     Returns the offset of the cell in the cell_relative.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (str): write your description
+     """
 		if cell_relative_offset != llfuse.ROOT_INODE:
 			return self._yarp_get_cell_worker(cell_relative_offset)
 
 		return self._yarp_get_cell_worker(self._yarp_root_cell_offset)
 
 	def _yarp_parse(self, cell_relative_offset, skip = 0):
+     """
+     Parse a yarp specification.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+         skip: (str): write your description
+     """
 		if not self._yarp_is_key(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -296,6 +384,14 @@ class YarpFS(llfuse.Operations):
 				yield (curr_name, self._yarp_construct_attr(relative_offset))
 
 	def _yarp_lookup_by_name(self, cell_relative_offset, name):
+     """
+     Looks up a yarp name by name.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+         name: (str): write your description
+     """
 		if not self._yarp_is_key(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -388,6 +484,13 @@ class YarpFS(llfuse.Operations):
 		raise llfuse.FUSEError(errno.ENOENT)
 
 	def _yarp_parse_data(self, cell_relative_offset):
+     """
+     Parses the data cell.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		if not self._yarp_is_value(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -428,6 +531,13 @@ class YarpFS(llfuse.Operations):
 		return data
 
 	def _yarp_parse_classname(self, cell_relative_offset):
+     """
+     Parse the yarp name.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		if not self._yarp_is_key(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -442,6 +552,13 @@ class YarpFS(llfuse.Operations):
 		return buf_classname[ : classname_length]
 
 	def _yarp_parse_data_type(self, cell_relative_offset):
+     """
+     Parses the data_type.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		if not self._yarp_is_value(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -457,6 +574,13 @@ class YarpFS(llfuse.Operations):
 		return data_type_str.encode(self._yarp_encoding)
 
 	def _yarp_construct_attr(self, cell_relative_offset):
+     """
+     Construct a yarp attribute.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		if not self._yarp_is_virtual_inode(cell_relative_offset):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -504,20 +628,47 @@ class YarpFS(llfuse.Operations):
 		return attr
 
 	def _yarp_cell_relative_offset_to_handle(self, cell_relative_offset):
+     """
+     Return the offset of the yarp cell.
+
+     Args:
+         self: (todo): write your description
+         cell_relative_offset: (bool): write your description
+     """
 		self._yarp_cell_relative_offsets.append(cell_relative_offset)
 		return cell_relative_offset
 
 	def _yarp_handle_to_cell_relative_offset(self, handle):
+     """
+     Handle yarp of the yarp offset.
+
+     Args:
+         self: (todo): write your description
+         handle: (todo): write your description
+     """
 		if handle not in self._yarp_cell_relative_offsets:
 			raise llfuse.FUSEError(errno.EBADF)
 
 		return handle
 
 	def _yarp_release_handle(self, handle):
+     """
+     Handle a yarp handle.
+
+     Args:
+         self: (todo): write your description
+         handle: (todo): write your description
+     """
 		cell_relative_offset = self._yarp_handle_to_cell_relative_offset(handle)
 		self._yarp_cell_relative_offsets.remove(cell_relative_offset)
 
 	def init(self):
+     """
+     Initialize the yarp network
+
+     Args:
+         self: (todo): write your description
+     """
 		# Pick the effective version.
 		self._yarp_version = self._yarp_primary.baseblock.effective_version
 
@@ -531,6 +682,12 @@ class YarpFS(llfuse.Operations):
 		self._yarp_cell_relative_offsets = []
 
 	def destroy(self):
+     """
+     Destroy the yarp file.
+
+     Args:
+         self: (todo): write your description
+     """
 		# Close the primary file.
 		self._yarp_file.close()
 
@@ -545,12 +702,38 @@ class YarpFS(llfuse.Operations):
 			self._yarp_log2.close()
 
 	def access(self, inode, mode, ctx):
+     """
+     Check if access is allowed.
+
+     Args:
+         self: (todo): write your description
+         inode: (todo): write your description
+         mode: (str): write your description
+         ctx: (todo): write your description
+     """
 		return True
 
 	def getattr(self, inode, ctx):
+     """
+     Get the yarp.
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         ctx: (todo): write your description
+     """
 		return self._yarp_construct_attr(inode)
 
 	def open(self, inode, flags, ctx):
+     """
+     Opens the file.
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         flags: (int): write your description
+         ctx: (todo): write your description
+     """
 		flags_writable = os.O_WRONLY | os.O_RDWR | os.O_APPEND
 		if flags & flags_writable > 0:
 			raise llfuse.FUSEError(errno.EROFS)
@@ -558,17 +741,51 @@ class YarpFS(llfuse.Operations):
 		return self._yarp_cell_relative_offset_to_handle(inode)
 
 	def opendir(self, inode, ctx):
+     """
+     Opendir_cell_relative_relative_relative_relative_to_to_relative_relative_relative_relative_relative_relative_
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         ctx: (todo): write your description
+     """
 		return self._yarp_cell_relative_offset_to_handle(inode)
 
 	def lookup(self, parent_inode, name, ctx):
+     """
+     Look up a yarp by name.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (todo): write your description
+         name: (str): write your description
+         ctx: (todo): write your description
+     """
 		name = name.decode(self._yarp_encoding)
 		return self._yarp_lookup_by_name(parent_inode, name)
 
 	def read(self, fh, off, size):
+     """
+     Reads data from the file.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+         off: (todo): write your description
+         size: (int): write your description
+     """
 		data = self._yarp_parse_data(self._yarp_handle_to_cell_relative_offset(fh))
 		return data[off : off + size]
 
 	def readdir(self, fh, off):
+     """
+     Generator that reads directory structure.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+         off: (todo): write your description
+     """
 		cell_relative_offset = self._yarp_handle_to_cell_relative_offset(fh)
 
 		i = off
@@ -577,12 +794,34 @@ class YarpFS(llfuse.Operations):
 			i += 1
 
 	def release(self, fh):
+     """
+     Release the yarp.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+     """
 		self._yarp_release_handle(fh)
 
 	def releasedir(self, fh):
+     """
+     Release yarp.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+     """
 		self._yarp_release_handle(fh)
 
 	def listxattr(self, inode, ctx):
+     """
+     List all xattr. packet.
+
+     Args:
+         self: (todo): write your description
+         inode: (todo): write your description
+         ctx: (todo): write your description
+     """
 		if not self._yarp_is_virtual_inode(inode):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -592,6 +831,15 @@ class YarpFS(llfuse.Operations):
 			yield XATTR_DATA_TYPE
 
 	def getxattr(self, inode, name, ctx):
+     """
+     Get an attribute.
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         name: (str): write your description
+         ctx: (todo): write your description
+     """
 		if not self._yarp_is_virtual_inode(inode):
 			raise llfuse.FUSEError(errno.EBADF)
 
@@ -605,6 +853,13 @@ class YarpFS(llfuse.Operations):
 		raise llfuse.FUSEError(llfuse.ENOATTR)
 
 	def statfs(self, ctx):
+     """
+     Returns statfs statistics.
+
+     Args:
+         self: (todo): write your description
+         ctx: (todo): write your description
+     """
 		stat = llfuse.StatvfsData()
 
 		stat.f_bsize = 512
@@ -621,43 +876,179 @@ class YarpFS(llfuse.Operations):
 		return stat
 
 	def create(self, parent_inode, name, mode, flags, ctx):
+     """
+     Creates a file.
+
+     Args:
+         self: (int): write your description
+         parent_inode: (str): write your description
+         name: (str): write your description
+         mode: (str): write your description
+         flags: (int): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def fsync(self, fh, datasync):
+     """
+     Synchronously sync a file.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+         datasync: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def fsyncdir(self, fh, datasync):
+     """
+     Convenience method.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+         datasync: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def link(self, inode, new_parent_inode, new_name, ctx):
+     """
+     Create a link.
+
+     Args:
+         self: (todo): write your description
+         inode: (todo): write your description
+         new_parent_inode: (str): write your description
+         new_name: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def mkdir(self, parent_inode, name, mode, ctx):
+     """
+     Create a directory.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (todo): write your description
+         name: (str): write your description
+         mode: (dict): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def mknod(self, parent_inode, name, mode, rdev, ctx):
+     """
+     Create a file descriptor.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (todo): write your description
+         name: (str): write your description
+         mode: (todo): write your description
+         rdev: (todo): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def removexattr(self, inode, name, ctx):
+     """
+     Removes an attribute from the given name.
+
+     Args:
+         self: (todo): write your description
+         inode: (todo): write your description
+         name: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def rename(self, parent_inode_old, name_old, parent_inode_new, name_new, ctx):
+     """
+     Rename this context.
+
+     Args:
+         self: (todo): write your description
+         parent_inode_old: (bool): write your description
+         name_old: (str): write your description
+         parent_inode_new: (bool): write your description
+         name_new: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def rmdir(self, parent_inode, name, ctx):
+     """
+     Create a new directory.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (todo): write your description
+         name: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def setattr(self, inode, attr, fields, fh, ctx):
+     """
+     Set an attribute on the message.
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         attr: (str): write your description
+         fields: (list): write your description
+         fh: (todo): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def setxattr(self, inode, name, value, ctx):
+     """
+     Set an attribute on the given attribute.
+
+     Args:
+         self: (todo): write your description
+         inode: (str): write your description
+         name: (str): write your description
+         value: (todo): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def symlink(self, parent_inode, name, target, ctx):
+     """
+     Create a symlink.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (todo): write your description
+         name: (str): write your description
+         target: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def unlink(self, parent_inode, name, ctx):
+     """
+     Unlink the link.
+
+     Args:
+         self: (todo): write your description
+         parent_inode: (str): write your description
+         name: (str): write your description
+         ctx: (todo): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)
 
 	def write(self, fh, off, buf):
+     """
+     Write the given bytes to the device.
+
+     Args:
+         self: (todo): write your description
+         fh: (todo): write your description
+         off: (float): write your description
+         buf: (str): write your description
+     """
 		raise llfuse.FUSEError(errno.EROFS)

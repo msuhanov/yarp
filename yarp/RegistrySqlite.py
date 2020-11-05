@@ -173,9 +173,21 @@ class YarpDB(object):
 			self._db_process_deleted_data()
 
 	def __enter__(self):
+     """
+     Decor function.
+
+     Args:
+         self: (todo): write your description
+     """
 		return self
 
 	def __exit__(self, *args):
+     """
+     Exit the exit.
+
+     Args:
+         self: (todo): write your description
+     """
 		self.close()
 
 	def close(self):
@@ -457,6 +469,12 @@ class YarpDB(object):
 		"""Add allocated and referenced keys and values from a normal hive to the database."""
 
 		def process_key(key):
+      """
+      Process a subkeys.
+
+      Args:
+          key: (str): write your description
+      """
 			self._db_add_key(key)
 
 			for subkey in key.subkeys():

@@ -148,6 +148,11 @@ record_list = path.join(RECORDS_DIR, 'dummy_list')
 record_db = path.join(RECORDS_DIR, 'dummy_db')
 
 def test_empty():
+    """
+    Check if all empty empty data is empty.
+
+    Args:
+    """
 	with open(hive_empty, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -170,6 +175,11 @@ def test_empty():
 		assert timestamp is None
 
 def test_bigdata():
+    """
+    Test if the bigquery
+
+    Args:
+    """
 	with open(hive_bigdata, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -195,6 +205,11 @@ def test_bigdata():
 		assert key.value('doesnt_exist') is None
 
 def test_many_subkeys():
+    """
+    Finds all keys in a subkeys.
+
+    Args:
+    """
 	with open(hive_many_subkeys, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -229,6 +244,11 @@ def test_many_subkeys():
 		assert key is None
 
 def test_garbage():
+    """
+    Check if the test test test test for a test.
+
+    Args:
+    """
 	with open(hive_garbage, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -241,6 +261,11 @@ def test_garbage():
 		assert cnt == 1
 
 def test_duplicate_subkeys():
+    """
+    Test if all subkeys of the given keys.
+
+    Args:
+    """
 	with open(hive_duplicate_subkeys, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -254,8 +279,19 @@ def test_duplicate_subkeys():
 
 @pytest.mark.parametrize('reverse', [False, True])
 def test_dirty_new1(reverse):
+    """
+    Compare two new changes in two dates.
+
+    Args:
+        reverse: (bool): write your description
+    """
 
 	def log_entry_counter():
+     """
+     Adds a counter counter.
+
+     Args:
+     """
 		log_entry_counter.c += 1
 
 	with open(hive_dirty_new1, 'rb') as primary, open(hive_dirty_new1_log1, 'rb') as log1, open(hive_dirty_new1_log2, 'rb') as log2:
@@ -336,6 +372,11 @@ def test_dirty_new1(reverse):
 		assert value_data[-1] == '\x00'
 
 def test_dirty_new2():
+    """
+    Check if the test files have changed.
+
+    Args:
+    """
 	with open(hive_dirty_new2, 'rb') as primary, open(hive_dirty_new2_log1, 'rb') as log1, open(hive_dirty_new2_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 
@@ -347,6 +388,11 @@ def test_dirty_new2():
 		assert t == [log2]
 
 def test_dirty_old():
+    """
+    Determine hashed data.
+
+    Args:
+    """
 	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
 		hive = Registry.RegistryHive(primary)
 
@@ -385,6 +431,11 @@ def test_dirty_old():
 			assert value_4500.data() == value_4500_r.data()
 
 def test_dirty_old_rollback_changes():
+    """
+    Test if changes made changes
+
+    Args:
+    """
 	with open(hive_dirty_old, 'rb') as primary, open(hive_dirty_old_log, 'rb') as log:
 		hive = Registry.RegistryHive(primary)
 
@@ -403,6 +454,11 @@ def test_dirty_old_rollback_changes():
 		assert value_4500 is None
 
 def test_recovery_not_required():
+    """
+    Check if the test test.
+
+    Args:
+    """
 	with open(hive_dirty_old_recovered, 'rb') as recovered:
 		hive = Registry.RegistryHive(recovered)
 		dummy = BytesIO()
@@ -414,6 +470,11 @@ def test_recovery_not_required():
 			hive.recover_new(dummy)
 
 def test_unicode():
+    """
+    Test if the unicode string is valid.
+
+    Args:
+    """
 	with open(hive_unicode, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -438,6 +499,11 @@ def test_unicode():
 		assert key.path_partial() == key.path()
 
 def test_extended_ascii():
+    """
+    Test if the ascii ascii iscii.
+
+    Args:
+    """
 	with open(hive_extended_ascii, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -452,7 +518,18 @@ def test_extended_ascii():
 		assert value.data() == u'ëigenaardig\x00'
 
 def test_autorecovery():
+    """
+    Convert auto - auto - autorecovery file.
+
+    Args:
+    """
 	def convert_tuple(t):
+     """
+     Convert a tuple to tuple.
+
+     Args:
+         t: (todo): write your description
+     """
 		assert t.recovered
 		file_objects = t.file_objects
 		assert len(file_objects) < 3 and len(file_objects) > 0
@@ -588,6 +665,11 @@ def test_autorecovery():
 			hive.recover_auto(log, None, log)
 
 def test_invalid_parent():
+    """
+    Determine if the parent exists.
+
+    Args:
+    """
 	with open(hive_invalid_parent, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.WalkException):
@@ -595,6 +677,11 @@ def test_invalid_parent():
 				for subkey_2 in subkey_1.subkeys():
 					pass
 def test_bad_list():
+    """
+    List all bad bad bad bad bad bad bad bad bad bad bad sets.
+
+    Args:
+    """
 	with open(hive_bad_list, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.WalkException):
@@ -603,6 +690,11 @@ def test_bad_list():
 					pass
 
 def test_bad_subkey():
+    """
+    Test for bad bad subkey.
+
+    Args:
+    """
 	with open(hive_bad_subkey, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.WalkException):
@@ -611,12 +703,22 @@ def test_bad_subkey():
 					pass
 
 def test_access_bits():
+    """
+    Test if the access key exists
+
+    Args:
+    """
 	with open(hive_dirty_new1, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		key = hive.find_key('\\key2\\key2_2')
 		assert key.access_bits() == 2
 
 def test_bad_baseblock():
+    """
+    Test if a baseblock is valid.
+
+    Args:
+    """
 	with open(hive_bad_baseblock, 'rb') as primary, open(hive_bad_baseblock_log1, 'rb') as log1, open(hive_bad_baseblock_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 
@@ -635,22 +737,42 @@ def test_bad_baseblock():
 		assert hive.find_key('key_with_many_subkeys') is not None
 
 def test_bad_log1():
+    """
+    Test if two log1 log1 *
+
+    Args:
+    """
 	with open(hive_bad_log1, 'rb') as primary, open(hive_bad_log1_log1, 'rb') as log1, open(hive_bad_log1_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.AutoRecoveryException):
 			hive.recover_auto(None, log1, log2)
 def test_bad_log2():
+    """
+    Test for bad bad bad bad bad bad bad bad bad.
+
+    Args:
+    """
 	with open(hive_bad_log2, 'rb') as primary, open(hive_bad_log2_log1, 'rb') as log1, open(hive_bad_log2_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.AutoRecoveryException):
 			hive.recover_auto(None, log1, log2)
 
 def test_bad_log3():
+    """
+    Test for bad bad bad bad bad bad log3.
+
+    Args:
+    """
 	with open(hive_bad_log3, 'rb') as primary, open(hive_bad_log3_log1, 'rb') as log1, open(hive_bad_log3_log2, 'rb') as log2:
 		hive = Registry.RegistryHive(primary)
 		with pytest.raises(Registry.AutoRecoveryException):
 			hive.recover_auto(None, log1, log2)
 def test_writable():
+    """
+    Create a writable object.
+
+    Args:
+    """
 	with open(hive_empty, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 
@@ -673,6 +795,11 @@ def test_writable():
 		assert not hive.registry_file.writable
 
 def test_bogus_keynames():
+    """
+    Find all bogus bogames in the k.
+
+    Args:
+    """
 	with open(hive_bogus_keynames, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		for k in hive.root_key().subkeys():
@@ -682,6 +809,11 @@ def test_bogus_keynames():
 		assert hive.find_key('testnu\x00l') is not None
 
 def test_new_flags():
+    """
+    Create a new virtualization.
+
+    Args:
+    """
 	with open(hive_new_flags, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 
@@ -697,6 +829,11 @@ def test_new_flags():
 		assert key_2.key_node.get_user_flags_old() == 0
 
 def test_multisz():
+    """
+    Returns true if multisz is a multisz.
+
+    Args:
+    """
 	with open(hive_multisz, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		key = hive.find_key('key')
@@ -709,6 +846,11 @@ def test_multisz():
 		assert len(l) == 3 and l[0] == u'привет\x00' and l[1] == u'как дела?\x00' and l[2] == '\x00'
 
 def test_strings():
+    """
+    Find all strings in - placeholders file.
+
+    Args:
+    """
 	with open(hive_strings, 'rb') as primary:
 		hive = Registry.RegistryHive(primary)
 		key = hive.find_key('key')
@@ -719,6 +861,11 @@ def test_strings():
 		assert key.value('3').data() == u'test тест \x00'
 
 def test_unicode_garbage():
+    """
+    Test if a unicode is unicode.
+
+    Args:
+    """
 	s = b'a\x00b\x00\x00\x00c\x00d\x00'
 	assert Registry.DecodeUnicode(s, True) == u'ab\x00'
 	assert Registry.DecodeUnicode(s, False) == u'ab\x00cd'
@@ -731,16 +878,31 @@ def test_unicode_garbage():
 	assert Registry.DecodeUnicodeMulti(s, True) == u'a\x00b\x00\x00'
 
 def test_unicode_illegal():
+    """
+    Test if the pid.
+
+    Args:
+    """
 	assert Registry.DecodeUnicode(b'\x74\x00\x00\xD8\x61\x00') == u't' + b'\xfd\xff'.decode('utf-16le') + 'a'
 	assert Registry.DecodeUnicode(b'\x00\xD8') == b'\xfd\xff'.decode('utf-16le')
 
 def test_security():
+    """
+    Test if a security
+
+    Args:
+    """
 	with open(hive_unicode, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 		sec = hive.root_key().security()
 		assert len(sec.descriptor()) == 144
 
 def test_wrong_order():
+    """
+    Determine the order order of the order of all - order.
+
+    Args:
+    """
 	with open(hive_wrong_order, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -758,6 +920,11 @@ def test_wrong_order():
 		assert c == 4
 
 def test_truncated_name():
+    """
+    Truncate the name of the files in the registry
+
+    Args:
+    """
 	with open(hive_truncated_name, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -767,6 +934,12 @@ def test_truncated_name():
 
 @pytest.mark.parametrize('walk_everywhere', [True, False])
 def test_unreferenced(walk_everywhere):
+    """
+    Test for unreferenced of the given file.
+
+    Args:
+        walk_everywhere: (todo): write your description
+    """
 	with open(hive_healed, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -790,6 +963,11 @@ def test_unreferenced(walk_everywhere):
 			assert len(hive.registry_file.cell_map_free) == len(hive.registry_file.cell_map_unallocated)
 
 def test_deleted():
+    """
+    Test for deleted deleted keys.
+
+    Args:
+    """
 	with open(hive_deleted_data, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -863,12 +1041,23 @@ def test_deleted():
 				assert i.data() == 'test\x00'
 
 def test_comp():
+    """
+    Executes the test.
+
+    Args:
+    """
 	with open(hive_comp, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 		hive.walk_everywhere()
 
 @pytest.mark.parametrize('recover_fragments', [False, True])
 def test_carving(recover_fragments):
+    """
+    Test if the_carving.
+
+    Args:
+        recover_fragments: (todo): write your description
+    """
 	with open(hive_carving0, 'rb') as f:
 		carver = RegistryCarve.Carver(f)
 		for i in carver.carve(recover_fragments):
@@ -1075,6 +1264,12 @@ def test_carving(recover_fragments):
 
 @pytest.mark.parametrize('recover_fragments', [False, True])
 def test_compressed_carving(recover_fragments):
+    """
+    Determine the fragment : parametric fragments.
+
+    Args:
+        recover_fragments: (todo): write your description
+    """
 	with open(hive_carving_compressed, 'rb') as f:
 		carver = RegistryCarve.Carver(f)
 
@@ -1175,6 +1370,11 @@ def test_compressed_carving(recover_fragments):
 		RegistryHelpers.NTFS_COMPRESSION_UNIT_SIZE = old_compression_unit_size
 
 def test_remnants():
+    """
+    Test if the registry.
+
+    Args:
+    """
 	with open(hive_remnants, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1193,6 +1393,11 @@ def test_remnants():
 		assert c == 1
 
 def test_truncated():
+    """
+    Truncated test. test.
+
+    Args:
+    """
 	with open(hive_truncated, 'rb') as f:
 		hive = Registry.RegistryHiveTruncated(f)
 
@@ -1201,6 +1406,11 @@ def test_truncated():
 			assert i.name() in [ '{6214ff27-7b1b-41a3-9ae4-5fb851ffed63}', 'key_with_many_subkeys' ] or int(i.name()) > 0
 
 def test_effective_hbins_data_size():
+    """
+    Determine if the effective size of the same size.
+
+    Args:
+    """
 	with open(hive_effective_size, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1208,6 +1418,11 @@ def test_effective_hbins_data_size():
 		assert hive.registry_file.baseblock.get_hbins_data_size() != hive.registry_file.baseblock.effective_hbins_data_size
 
 def test_log_discovery():
+    """
+    Test if the case of the log files.
+
+    Args:
+    """
 	for i in range(len(log_discovery)):
 		p = log_discovery[i]
 		a = RegistryHelpers.DiscoverLogFiles(p)
@@ -1240,6 +1455,11 @@ def test_log_discovery():
 			assert False
 
 def test_deleted_tree_no_root_flag():
+    """
+    Test for the tree of the tree and remove_every.
+
+    Args:
+    """
 	with open(hive_deleted_tree_no_root_flag, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1257,6 +1477,11 @@ def test_deleted_tree_no_root_flag():
 		assert c == 4
 
 def test_deleted_tree_partial_path():
+    """
+    Return the path of the given partial tree.
+
+    Args:
+    """
 	with open(hive_deleted_tree_partial_path, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1272,6 +1497,11 @@ def test_deleted_tree_partial_path():
 		assert c == 4
 
 def test_flags_converter():
+    """
+    Test for conversion flags.
+
+    Args:
+    """
 	cases = [
 		{'log_entry_flags': 0, 'baseblock_flags': 0, 'result': 0},
 		{'log_entry_flags': 1, 'baseblock_flags': 0, 'result': 1},
@@ -1286,7 +1516,18 @@ def test_flags_converter():
 		assert RegistryFile.LogEntryFlagsToBaseBlockFlags(case['log_entry_flags'], case['baseblock_flags']) == case['result']
 
 def test_hive_save():
+    """
+    Check if a new test test.
+
+    Args:
+    """
 	def check_saved_hive(filepath):
+     """
+     Checks if the recovered.
+
+     Args:
+         filepath: (str): write your description
+     """
 		with open(filepath, 'rb') as recovered:
 			hive_recovered = Registry.RegistryHive(recovered)
 			assert not hive_recovered.registry_file.baseblock.is_file_dirty
@@ -1326,6 +1567,11 @@ def test_hive_save():
 	remove(tmp_file)
 
 def test_slack():
+    """
+    Test the slack record.
+
+    Args:
+    """
 	with open(record_nk, 'rb') as f:
 		buf = f.read()
 		r = RegistryRecords.KeyNode(buf)
@@ -1388,6 +1634,11 @@ def test_slack():
 		assert r.get_slack() == b'SLCK'
 
 def test_hive_slack():
+    """
+    Test for slack slack slack slack slack slack slack slack slack slack.
+
+    Args:
+    """
 	with open(hive_slack, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1406,6 +1657,11 @@ def test_hive_slack():
 		assert b'SLCK' in hive.effective_slack
 
 def test_data_slack():
+    """
+    Test the slack slack slack slack slack slack slack slack.
+
+    Args:
+    """
 	with open(hive_bigdata, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1425,6 +1681,11 @@ def test_data_slack():
 		assert value.data_slack() == [ b'w Valu' ]
 
 def test_invalid_ri():
+    """
+    Validate test test test test test results.
+
+    Args:
+    """
 	buf = b'ri\x00\x00'
 	with pytest.raises(RegistryRecords.ParseException):
 		ri = RegistryRecords.IndexRoot(buf)
@@ -1445,6 +1706,11 @@ def test_invalid_ri():
 		pass
 
 def test_deleted_value_assoc():
+    """
+    Set the deleted_deleted.
+
+    Args:
+    """
 	with open(hive_deleted_data, 'rb') as f:
 		hive = Registry.RegistryHive(f)
 
@@ -1462,6 +1728,11 @@ def test_deleted_value_assoc():
 		assert c == 1
 
 def test_old_log_with_remnant_data():
+    """
+    Test if the log file exists in the expected log file.
+
+    Args:
+    """
 	with open(log_with_remnant_data, 'rb') as f:
 		h = RegistryFile.OldLogFile(f)
 
@@ -1483,6 +1754,11 @@ def test_old_log_with_remnant_data():
 		assert remnant_data_1 == remnant_data_2 == b''
 
 def test_new_log_with_remnant_data():
+    """
+    Test if new test log file
+
+    Args:
+    """
 	with open(hive_dirty_new2_log1, 'rb') as f:
 		h = RegistryFile.NewLogFile(f)
 
@@ -1508,6 +1784,11 @@ def test_new_log_with_remnant_data():
 		assert remnant_data_1 == remnant_data_2 == remnant_data_expected_when_unused
 
 def test_remnant_log_entries():
+    """
+    Test if the log entries in a log file.
+
+    Args:
+    """
 	with open(hive_dirty_new2_log2, 'rb') as f:
 		h = RegistryFile.NewLogFile(f)
 
@@ -1522,6 +1803,11 @@ def test_remnant_log_entries():
 		assert c == 3
 
 def test_new_log_rebuild():
+    """
+    Create a new log log file
+
+    Args:
+    """
 	with open(hive_dirty_new2_log2, 'rb') as f:
 		log = RegistryFile.NewLogFile(f)
 
@@ -1542,6 +1828,11 @@ def test_new_log_rebuild():
 		assert log.list_remnant_log_entries(False) == []
 
 def test_sqlite():
+    """
+    : param sqlite_sql.
+
+    Args:
+    """
 	if sys.version_info.major != 3:
 		pytest.skip()
 
@@ -2154,6 +2445,12 @@ def test_sqlite():
 		assert c == 1
 
 		def process_rowid(rowid):
+      """
+      Process the rowid.
+
+      Args:
+          rowid: (todo): write your description
+      """
 			for i in h.values(rowid):
 				pass
 
@@ -2242,6 +2539,11 @@ def test_sqlite():
 			assert False
 
 def test_translator():
+    """
+    Test if a translator.
+
+    Args:
+    """
 	with open(truncated_hbin, 'rb') as src_obj:
 		hive_obj = RegistryFile.FragmentTranslator(src_obj)
 
@@ -2257,6 +2559,11 @@ def test_translator():
 		assert c == 2
 
 def test_translator_with_margin():
+    """
+    Test if the source file.
+
+    Args:
+    """
 	with open(hive_marg_recon_1, 'rb') as f:
 		carver = RegistryCarve.Carver(f)
 
@@ -2321,6 +2628,11 @@ def test_translator_with_margin():
 		assert c == 1
 
 def test_invalid_parent_fragment():
+    """
+    Validate the parent fragment of the parent fragment.
+
+    Args:
+    """
 	with open(fragment_invalid_parent, 'rb') as f:
 		hive_obj = RegistryFile.FragmentTranslator(f)
 
@@ -2337,6 +2649,11 @@ def test_invalid_parent_fragment():
 		assert c == 1
 
 def test_bifragmented():
+    """
+    Determine md5ragragragragragragragragmented algorithm.
+
+    Args:
+    """
 	with open(hive_recon_2, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2352,6 +2669,11 @@ def test_bifragmented():
 		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
 
 def test_trifragmented():
+    """
+    Determine mdifragmented md5.
+
+    Args:
+    """
 	with open(hive_recon_3, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2367,6 +2689,11 @@ def test_trifragmented():
 		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
 
 def test_quadfragmented():
+    """
+    Generate hexfrmented hexadecag.
+
+    Args:
+    """
 	with open(hive_recon_4, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2382,6 +2709,11 @@ def test_quadfragmented():
 		assert h.hexdigest() == '2b9c80fed56a3f25ef7fd03d9462387f'
 
 def test_biplusfragmented():
+    """
+    Determine the md5fragfragplus
+
+    Args:
+    """
 	with open(hive_recon_2plus1, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2397,6 +2729,11 @@ def test_biplusfragmented():
 		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
 
 def test_biandquadfragmented():
+    """
+    Generate hexdigandstructuredstruct
+
+    Args:
+    """
 	with open(hive_recon_2and4, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2430,6 +2767,11 @@ def test_biandquadfragmented():
 		assert c == 2
 
 def test_incremental():
+    """
+    Determine md5 md5 test.
+
+    Args:
+    """
 	with open(hive_recon_2, 'rb') as f:
 		r = RegistryCarve.HiveReconstructor(f)
 		r.find_fragments()
@@ -2487,6 +2829,11 @@ def test_incremental():
 		assert h.hexdigest() == 'edaf7986726c1343752763bd1b31ddf2'
 
 def test_ntfs_data_attr():
+    """
+    Convert ndmapping object attributes.
+
+    Args:
+    """
 	if sys.version_info.major != 3:
 		pytest.skip()
 
@@ -2547,6 +2894,11 @@ def test_ntfs_data_attr():
 	assert RegistryHelpers.NTFSFindDataAttributeRecords(b'') == []
 
 def test_sid_parsing():
+    """
+    This function to make_pars.
+
+    Args:
+    """
 	if sys.version_info.major != 3:
 		pytest.skip()
 
@@ -2580,6 +2932,11 @@ def test_sid_parsing():
 	assert RegistryHelpers.ParseSID(sid_toolong) == 'S-1-5-21-646518322-1873620750-619646970-1110'
 
 def test_key_security():
+    """
+    Create a security security security security key.
+
+    Args:
+    """
 	if sys.version_info.major != 3:
 		pytest.skip()
 
@@ -2590,6 +2947,11 @@ def test_key_security():
 		assert secinfo.owner_sid == 'S-1-5-32-544'
 
 def test_lz77():
+    """
+    Creates lz77 compressed compressed compressed compressed compressed compressed compressed data.
+
+    Args:
+    """
 	assert RegistryHelpers.LZ77DecompressBuffer(b'') == (b'', True, 0)
 	assert RegistryHelpers.LZ77DecompressBuffer(b'1') == (b'', True, 0)
 	assert RegistryHelpers.LZ77DecompressBuffer(b'12') == (b'', True, 0)
@@ -2624,6 +2986,11 @@ def test_lz77():
 	assert not RegistryHelpers.LZ77CheckCompressedSignature(b'\x04\x00\x10\x00\x68\x62\x69\x6E', b'hbin1234')
 
 def test_lz77huffman():
+    """
+    Creates lz77huffman compressed compressed compressed compressed compressed compressed compressed compressed compressed file.
+
+    Args:
+    """
 	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'') == (b'', True, 0)
 	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'1') == (b'', True, 0)
 	assert RegistryHelpers.LZ77HuffmanDecompressBuffer(b'12') == (b'', True, 0)
@@ -2658,6 +3025,11 @@ def test_lz77huffman():
 	assert a[1]
 
 def test_memcarving():
+    """
+    Determine the memcar of the memcar.
+
+    Args:
+    """
 	with open(hive_memcarving_0, 'rb') as f:
 		carver = RegistryCarve.MemoryCarver(f)
 		assert carver.fileno is not None
@@ -2830,6 +3202,12 @@ def test_memcarving():
 		assert c == 1
 
 	def prepare_compressed_image(gap_size):
+     """
+     Prepare the compressed compressed compressed compressed compressed compressed compressed compressed image.
+
+     Args:
+         gap_size: (int): write your description
+     """
 		with open(hive_memcarving_0, 'rb') as f:
 			normal_data = f.read()
 
@@ -2877,10 +3255,21 @@ def test_memcarving():
 	assert k == 2
 
 def test_log_carving_1():
+    """
+    Test log the log files.
+
+    Args:
+    """
 	global found
 	found = 0
 
 	def test_translator(buf):
+     """
+     Test for a log file.
+
+     Args:
+         buf: (todo): write your description
+     """
 		src_obj = BytesIO(buf)
 		log_file = RegistryFile.LogEntriesTranslator(src_obj)
 		log = RegistryFile.NewLogFile(log_file)
@@ -2949,7 +3338,18 @@ def test_log_carving_1():
 	f.close()
 
 def test_log_carving_2():
+    """
+    : parameter logs.
+
+    Args:
+    """
 	def test_translator(buf):
+     """
+     Test log a log file.
+
+     Args:
+         buf: (todo): write your description
+     """
 		src_obj = BytesIO(buf)
 		log_file = RegistryFile.LogEntriesTranslator(src_obj)
 		log = RegistryFile.NewLogFile(log_file)
@@ -3124,6 +3524,11 @@ def test_log_carving_2():
 	f.close()
 
 def test_layered_keys():
+    """
+    Sets the keys for the given keys.
+
+    Args:
+    """
 	f = open(delta_hive, 'rb')
 	h = Registry.RegistryHive(f)
 

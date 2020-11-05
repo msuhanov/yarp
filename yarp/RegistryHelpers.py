@@ -25,6 +25,12 @@ def DiscoverLogFiles(PrimaryPath):
 	"""Return a named tuple (DiscoveredLogFiles) describing a path to each transaction log file of a supplied primary file."""
 
 	def DiscoverLogFilesInternal(PrimaryPath):
+     """
+     * log the path *
+
+     Args:
+         PrimaryPath: (str): write your description
+     """
 		# We prefer uppercase extensions.
 		log = PrimaryPath + '.LOG'
 		log1 = PrimaryPath + '.LOG1'
@@ -71,6 +77,12 @@ def HexDump(Buffer):
 	"""Return bytes from Buffer as a hexdump-like string (16 bytes per line)."""
 
 	def int2hex(i):
+     """
+     Convert a hexadecimal string
+
+     Args:
+         i: (int): write your description
+     """
 		return '{:02X}'.format(i)
 
 	if type(Buffer) is not bytearray:
@@ -132,6 +144,13 @@ def NTFSDecompressUnit(Buffer):
 	"""Decompress NTFS data from Buffer (a single compression unit) using the LZNT1 algorithm."""
 
 	def is_valid_write_request(offset, length):
+     """
+     Is the number of bits in a given length.
+
+     Args:
+         offset: (int): write your description
+         length: (int): write your description
+     """
 		return offset + length <= 2*1024*1024*1024 # Reject obviously invalid write requests.
 
 	if len(Buffer) > NTFS_COMPRESSION_UNIT_SIZE or len(Buffer) < NTFS_CLUSTER_SIZE:
@@ -508,6 +527,12 @@ def ParseSecurityDescriptorRelative(Buffer):
 	"""
 
 	def ValidateOffset(Offset):
+     """
+     Validate the offset of the offset.
+
+     Args:
+         Offset: (int): write your description
+     """
 		if Offset == 0: # A special value (the field is missing).
 			return True
 
@@ -541,6 +566,12 @@ def LZ77DecompressBuffer(Buffer):
 	"""
 
 	def is_valid_write_request(offset):
+     """
+     Check if a write write write request.
+
+     Args:
+         offset: (int): write your description
+     """
 		return offset < 2*1024*1024*1024 # Reject obviously invalid write requests.
 
 	OutputObject = BytesIO()
@@ -720,9 +751,20 @@ def LZ77HuffmanDecompressBuffer(Buffer, CompatibilityMode = False):
 	"""
 
 	def is_valid_write_request():
+     """
+     Return true if write is a write request.
+
+     Args:
+     """
 		return OutputObject.tell() < 2*1024*1024*1024 # Reject obviously invalid write requests.
 
 	def Read16Bits(Position):
+     """
+     Returns a list of the number of the values.
+
+     Args:
+         Position: (todo): write your description
+     """
 		TwoBytes = Buffer[Position : Position + 2]
 		if len(TwoBytes) != 2:
 			return
