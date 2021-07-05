@@ -7,8 +7,7 @@
 from __future__ import unicode_literals, division
 
 from .RegistryFile import RegistryException, BASE_BLOCK_LENGTH_PRIMARY
-from . import RegistryFile
-from . import RegistryRecords
+from . import RegistryFile, RegistryRecords, RegistryUnicode
 from struct import unpack
 from datetime import datetime, timedelta
 from collections import namedtuple
@@ -84,7 +83,7 @@ def DecodeFiletime(Timestamp):
 	return datetime(1601, 1, 1) + timedelta(microseconds = Timestamp / 10)
 
 def DecodeUnicode(Buffer, RemoveGarbage = False, StrictDecode = False):
-	"""Decode the Unicode (UTF-16LE) string and return it.
+	"""Decode the Unicode (UTF-16LE) string and return it. Surrogate pairs are supported.
 	When 'RemoveGarbage' is True, this function will attempt to sanitize a null-terminated Unicode string.
 	When 'StrictDecode' is True, illegal characters will not be replaced.
 	"""
@@ -651,7 +650,7 @@ class RegistryKey(object):
 				for leaf_offset in index_root.elements():
 					list_buf = self.get_cell(leaf_offset)
 					for subkey in process_leaf(list_buf):
-						curr_name = subkey.name().upper()
+						curr_name = RegistryUnicode.Upper(subkey.name())
 						if curr_name not in subkeys_names:
 							subkeys_names.add(curr_name)
 						else:
@@ -675,7 +674,7 @@ class RegistryKey(object):
 						yield subkey
 			else:
 				for subkey in process_leaf(list_buf):
-					curr_name = subkey.name().upper()
+					curr_name = RegistryUnicode.Upper(subkey.name())
 					if curr_name not in subkeys_names:
 						subkeys_names.add(curr_name)
 					else:
@@ -736,7 +735,7 @@ class RegistryKey(object):
 				for curr_slack in slack_list:
 					self.effective_slack.add(curr_slack)
 
-				curr_name = curr_value.name().upper()
+				curr_name = RegistryUnicode.Upper(curr_value.name())
 				if curr_name not in values_names:
 					values_names.add(curr_name)
 				else:

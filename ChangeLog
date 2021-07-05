@@ -1,3 +1,12 @@
+Version: 1.0.32
+
+yarp-print: optimize the memory usage when dealing with deleted values and truncated hives.
+New module: RegistryUnicode.
+Registry, RegistryFuse: refactor the code to use a new uppercase function when validating the hive.
+Minor changes.
+
+---
+
 Version: 1.0.31
 
 Registry: use uppercase strings for case-insensitive comparison.

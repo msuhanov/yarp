@@ -5,8 +5,7 @@
 
 from __future__ import unicode_literals
 
-from . import Registry
-from . import RegistryFile
+from . import Registry, RegistryFile
 
 MAX_PLAUSIBLE_SUBKEYS_COUNT = 10000
 MAX_PLAUSIBLE_VALUES_COUNT  = 1000

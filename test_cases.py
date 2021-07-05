@@ -9,7 +9,7 @@ import tarfile
 from io import BytesIO
 from os import path, remove
 from hashlib import md5
-from yarp import Registry, RegistryFile, RegistryRecords, RegistryRecover, RegistryCarve, RegistrySqlite, RegistryHelpers
+from yarp import Registry, RegistryFile, RegistryRecords, RegistryRecover, RegistryCarve, RegistrySqlite, RegistryHelpers, RegistryUnicode
 
 HIVES_DIR = 'hives_for_tests'
 RECORDS_DIR = 'records_for_tests'
@@ -35,6 +35,10 @@ hive_dirty_old_recovered = path.join(HIVES_DIR, 'OldDirtyHive', 'RecoveredHive_W
 
 hive_unicode = path.join(HIVES_DIR, 'UnicodeHive')
 hive_extended_ascii = path.join(HIVES_DIR, 'ExtendedASCIIHive')
+hive_upcase = path.join(HIVES_DIR, 'UpcaseHive')
+hive_pair = path.join(HIVES_DIR, 'PairHive')
+hive_truncated_pair1 = path.join(HIVES_DIR, 'TruncatedPairHive')
+hive_truncated_pair2 = path.join(HIVES_DIR, 'TruncatedPairHive2')
 hive_invalid_parent = path.join(HIVES_DIR, 'InvalidParentHive')
 hive_bad_list = path.join(HIVES_DIR, 'BadListHive')
 hive_bad_subkey = path.join(HIVES_DIR, 'BadSubkeyHive')
@@ -451,6 +455,50 @@ def test_extended_ascii():
 		assert value.key_value.get_flags() & RegistryRecords.VALUE_COMP_NAME > 0
 		assert value.data() == u'ëigenaardig\x00'
 
+def test_upcase():
+	with open(hive_upcase, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		hive.walk_everywhere()
+
+		subkeys = [ 'ss1', 'SS3', b'\xdf\x00'.decode('utf-16le') + '2' ]
+		for i in hive.root_key().subkeys():
+			assert i.name() == subkeys.pop(0)
+
+		assert len(subkeys) == 0
+
+	with open(hive_pair, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		hive.walk_everywhere()
+
+		subkeys = [ 'ss1', 'SS3', b'\x01\xd8\x00\xdc'.decode('utf-16le') ]
+		for i in hive.root_key().subkeys():
+			assert i.name() == subkeys.pop(0)
+
+		assert len(subkeys) == 0
+
+
+	with open(hive_truncated_pair1, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		hive.walk_everywhere()
+
+		subkeys = [ 'ss1', 'SS3', b'\xfd\xff'.decode('utf-16le') ]
+		for i in hive.root_key().subkeys():
+			assert i.name() == subkeys.pop(0)
+
+		assert len(subkeys) == 0
+		assert hive.find_key(b'\xfd\xff'.decode('utf-16le')) is not None
+
+	with open(hive_truncated_pair2, 'rb') as f:
+		hive = Registry.RegistryHive(f)
+		hive.walk_everywhere()
+
+		subkeys = [ 'key1', 'key2', 'key3', 'key' + b'\xfd\xff'.decode('utf-16le'), 'key' + b'\xfd\xff'.decode('utf-16le') ]
+		for i in hive.root_key().subkeys():
+			assert i.name() == subkeys.pop(0)
+
+		assert len(subkeys) == 0
+		assert hive.find_key('key' + b'\xfd\xff'.decode('utf-16le')) is not None
+
 def test_autorecovery():
 	def convert_tuple(t):
 		assert t.recovered
@@ -733,6 +781,9 @@ def test_unicode_garbage():
 def test_unicode_illegal():
 	assert Registry.DecodeUnicode(b'\x74\x00\x00\xD8\x61\x00') == u't' + b'\xfd\xff'.decode('utf-16le') + 'a'
 	assert Registry.DecodeUnicode(b'\x00\xD8') == b'\xfd\xff'.decode('utf-16le')
+
+def test_unicode_upcase():
+	assert RegistryUnicode.Upper('яЯzZ123' + b'=\xd8\x03\xde'.decode('utf-16le')) == 'ЯЯZZ123' + b'=\xd8\x03\xde'.decode('utf-16le')
 
 def test_security():
 	with open(hive_unicode, 'rb') as f:

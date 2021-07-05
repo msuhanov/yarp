@@ -5,7 +5,7 @@
 
 from __future__ import unicode_literals
 
-from . import Registry, RegistryFile, RegistryRecords, RegistryHelpers
+from . import Registry, RegistryFile, RegistryRecords, RegistryHelpers, RegistryUnicode
 import llfuse
 import os
 import stat
@@ -90,7 +90,7 @@ class YarpFS(llfuse.Operations):
 			for value in key.values():
 				value_name = value.name()
 				if value_name in v_set:
-					raise Registry.WalkException('Invalid Unicode characters in names of values')
+					raise Registry.WalkException('Invalid or unusual Unicode characters in names of values')
 
 				v_set.add(value_name)
 				value_data_raw = value.data_raw()
@@ -102,10 +102,10 @@ class YarpFS(llfuse.Operations):
 			for subkey in key.subkeys():
 				sk_name = subkey.name()
 
-				if (prev_sk_name is not None and sk_name.upper() <= prev_sk_name.upper()) or sk_name.upper() in sk_set:
-					raise Registry.WalkException('Invalid Unicode characters in names of keys')
+				if (prev_sk_name is not None and RegistryUnicode.Upper(sk_name) <= RegistryUnicode.Upper(prev_sk_name)) or RegistryUnicode.Upper(sk_name) in sk_set:
+					raise Registry.WalkException('Invalid or unusual Unicode characters in names of keys')
 
-				sk_set.add(sk_name.upper())
+				sk_set.add(RegistryUnicode.Upper(sk_name))
 
 				if sk_name in v_set:
 					if key.cell_relative_offset in self._yarp_conflicts.keys():
@@ -314,6 +314,7 @@ class YarpFS(llfuse.Operations):
 
 		# The usual case.
 		name, record_type = self._yarp_deposixify_name(name)
+		name_upper = RegistryUnicode.Upper(name)
 
 		# Check the cache first.
 		if self._enable_cache and cell_relative_offset in self._yarp_cache.keys() and name in self._yarp_cache[cell_relative_offset].keys():
@@ -352,7 +353,7 @@ class YarpFS(llfuse.Operations):
 				else:
 					curr_name = Registry.DecodeUnicode(subkey.get_key_name())
 
-				if curr_name.upper() < name.upper():
+				if RegistryUnicode.Upper(curr_name) < name_upper:
 					lo = mid + 1
 				else:
 					hi = mid

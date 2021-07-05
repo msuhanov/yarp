@@ -264,18 +264,16 @@ def process_normal_hive(hive):
 		print()
 
 		scanner = RegistryRecover.Scanner(hive)
-		deleted_values = []
 
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryKey:
 				print_deleted_key(item)
-			elif type(item) is Registry.RegistryValue:
-				deleted_values.append(item)
 
 		print('Deleted values (all, may contain reallocated data):')
 		print()
-		for value in deleted_values:
-			print_deleted_value(value)
+		for item in scanner.scan():
+			if type(item) is Registry.RegistryValue:
+				print_deleted_value(item)
 
 def process_truncated_hive(hive):
 	print('Primary file seems to be truncated, only available keys and values will be printed', file = sys.stderr)
@@ -287,35 +285,31 @@ def process_truncated_hive(hive):
 	print('Keys and values (allocated):')
 	print()
 
-	all_values = []
 	for item in hive.scan():
-		if type(item) is Registry.RegistryValue:
-			all_values.append(item)
-		elif type(item) is Registry.RegistryKey:
+		if type(item) is Registry.RegistryKey:
 			print_truncated_key(item)
 
 	print('All values (allocated):')
 	print()
-	for value in all_values:
-		print_truncated_value(value)
+	for item in hive.scan():
+		if type(item) is Registry.RegistryValue:
+			print_truncated_value(item)
 
 	if args.do_deleted:
 		print('Unallocated keys and values (may contain reallocated data):')
 		print()
 
 		scanner = RegistryRecover.Scanner(hive, False)
-		deleted_values = []
 
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryKey:
 				print_deleted_key(item)
-			elif type(item) is Registry.RegistryValue:
-				deleted_values.append(item)
 
 		print('Unallocated values (all, may contain reallocated data):')
 		print()
-		for value in deleted_values:
-			print_deleted_value(value)
+		for item in hive.scan():
+			if type(item) is Registry.RegistryValue:
+				print_deleted_value(item)
 
 args = parse_args()
 
