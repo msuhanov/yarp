@@ -263,7 +263,7 @@ def process_normal_hive(hive):
 		print('Deleted keys and values (may contain reallocated data):')
 		print()
 
-		scanner = RegistryRecover.Scanner(hive)
+		scanner = RegistryRecover.Scanner(hive, yield_remnant_bytes = True)
 
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryKey:
@@ -274,6 +274,13 @@ def process_normal_hive(hive):
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryValue:
 				print_deleted_value(item)
+
+		print('Possible value data or other remnant data (can include deleted registry structures, slack or even garbage):')
+		print()
+		for item in scanner.scan():
+			if type(item) is bytes and len(item) > 4 and len(item.rstrip(b'\x00')) > 4:
+				print(RegistryHelpers.HexDump(item))
+				print('---')
 
 def process_truncated_hive(hive):
 	print('Primary file seems to be truncated, only available keys and values will be printed', file = sys.stderr)
@@ -299,7 +306,7 @@ def process_truncated_hive(hive):
 		print('Unallocated keys and values (may contain reallocated data):')
 		print()
 
-		scanner = RegistryRecover.Scanner(hive, False)
+		scanner = RegistryRecover.Scanner(hive, False, yield_remnant_bytes = True)
 
 		for item in scanner.scan():
 			if type(item) is Registry.RegistryKey:
@@ -307,9 +314,16 @@ def process_truncated_hive(hive):
 
 		print('Unallocated values (all, may contain reallocated data):')
 		print()
-		for item in hive.scan():
+		for item in scanner.scan():
 			if type(item) is Registry.RegistryValue:
 				print_deleted_value(item)
+
+		print('Possible value data or other remnant data (can include deleted registry structures, slack or even garbage):')
+		print()
+		for item in scanner.scan():
+			if type(item) is bytes and len(item) > 4 and len(item.rstrip(b'\x00')) > 4:
+				print(RegistryHelpers.HexDump(item))
+				print('---')
 
 args = parse_args()
 

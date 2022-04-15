@@ -127,6 +127,8 @@ hive_offreg_sqlite = path.join(HIVES_DIR, 'OffHive')
 
 hive_two_owners = path.join(HIVES_DIR, 'TwoOwnersHive')
 
+hive_remnant_bytes = path.join(HIVES_DIR, 'RemnantData')
+
 fragment_sqlite = path.join(HIVES_DIR, 'SqliteFragment')
 fragment_sqlite_db = path.join(HIVES_DIR, 'SqliteFragment.sqlite')
 fragment_invalid_parent = path.join(HIVES_DIR, 'InvalidParentFragment')
@@ -3212,4 +3214,184 @@ def test_layered_keys():
 
 	k = h.find_key('kEy')
 	assert k.flags_str() is None
+	f.close()
+
+def test_remnant_bytes():
+	f = open(hive_remnant_bytes, 'rb')
+
+	hive = Registry.RegistryHive(f)
+
+	hive.walk_everywhere()
+
+	scanner = RegistryRecover.Scanner(hive, True, False, True)
+
+	hashes = [ '465d17740b0d7c443de4b4e0afcaa1c4', '995dd6585d84b3b766c272463a785fc3', '7f3c8904ea293c3aae69c745407c93cc', 'f02eb13db5b9fc92516e3a400b8b5777', 'aacdda7f3ce91cd5ab212f58756e2106', 'afb86dbf44f95c3f3e0b852ab8cdc2eb', 'd8d838d33ee4bc3a167281e8e944aee5', '319c4caa15d4513ee10503f90a8bc59c', 'e9b5bbac405dbfa2241f5f4bb7154980', '22e401881c635dee0324c3ab263324fe', 'b48781ea2beb38f46871755e93d0e102', '6079c357fa4b1d06b6b2fb1a9eff2e4a', 'c324946ce1884cae603d6f4aa055ac8c' ]
+
+	c = 0
+	for i in scanner.scan():
+		if type(i) is bytes:
+			c += 1
+			hashes.remove(md5(i).hexdigest())
+
+	assert len(hashes) == 0
+	assert c == 13
+
+	v = b'vk\x01\x00\x00\x00\x00\x80\x00\x00\x00\x00\x03\x00\x00\x00\x01\x00\x00\x009\x03\x00\x00p\x03\x00\x00'
+
+	c = 0
+	c_v = 0
+	for i in scanner.process_cell(v):
+		if type(i) is bytes:
+			c += 1
+			assert i == b'\x00\x00p\x03\x00\x00'
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 1 and c_v == 1
+
+	v = v[ : -6]
+
+	c = 0
+	c_v = 0
+	for i in scanner.process_cell(v):
+		if type(i) is bytes:
+			c += 1
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 0 and c_v == 1
+
+	c = 0
+	c_v = 0
+	l = [ b'aaaa', b'zzzz' ]
+	for i in scanner.process_cell(l[0] + v + l[1]):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 2 and len(l) == 0 and c_v == 1
+
+	c = 0
+	c_v = 0
+	l = [ b'aa' ]
+	for i in scanner.process_cell(l[0] + v):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 1 and len(l) == 0 and c_v == 1
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz' ]
+	for i in scanner.process_cell(l[0] + v):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 1 and len(l) == 0 and c_v == 1
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz' ]
+	for i in scanner.process_cell(l[0] + v + v):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 1 and len(l) == 0 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz' ]
+	for i in scanner.process_cell(v + v + l[0]):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 1 and len(l) == 0 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz', b'zzzz' ]
+	for i in scanner.process_cell(l[0] + v + v + l[1]):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 2 and len(l) == 0 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz', b'zzzz', b'TEST1234' ]
+	for i in scanner.process_cell(l[0] + v + l[1] + v + l[2]):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 3 and len(l) == 0 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz', b'12', b'T' ]
+	for i in scanner.process_cell(l[0] + v + l[1] + v + l[2]):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 3 and len(l) == 0 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz', b'12', b'T' ]
+	for i in scanner.process_cell(l[0] + v + l[1] + v + l[2] + v):
+		if type(i) is bytes:
+			c += 1
+			if i in l:
+				l.remove(i)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 3 and len(l) == 1 and c_v == 2
+
+	c = 0
+	c_v = 0
+	l = [ b'aazz', b'12', b'TT' ]
+	for i in scanner.process_cell(l[0] + v + l[1] + v + l[2] + v + v):
+		if type(i) is bytes:
+			c += 1
+			assert i == l.pop(0)
+		else:
+			assert type(i) is Registry.RegistryValue
+			c_v += 1
+
+	assert c == 3 and len(l) == 0 and c_v == 4
+
 	f.close()

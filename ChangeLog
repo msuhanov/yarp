@@ -1,3 +1,10 @@
+Version: 1.0.33
+
+yarp-print: print deleted values correctly when dealing with truncated hives, print remnant value data (having no corresponding deleted key value).
+RegistryRecover: handle remnant value data.
+
+---
+
 Version: 1.0.32
 
 yarp-print: optimize the memory usage when dealing with deleted values and truncated hives.
